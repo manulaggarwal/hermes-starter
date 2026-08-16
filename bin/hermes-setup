@@ -97,15 +97,18 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   else
   for f in CLAUDE.md NEXT.md; do
     if [ -f "$WD/$f" ]; then skip "$f exists"
+    elif [ -e "$WD/$f" ]; then skip "$f exists but is not a file (directory?) — resolve manually"
     elif cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then WROTE_PROJECT=1; ok "$f"
-    else skip "$f NOT written — $WD unwritable"; fi
+    else skip "$f NOT written — cannot write $WD/$f"; fi
   done
   mkdir -p "$WD/daily-logs" "$WD/knowledge" 2>/dev/null || true   # type conflicts handled per-file below
   TODAY=$(date +%F)
   TODAY_LOG="$WD/daily-logs/$TODAY.md"
   if [ -e "$WD/daily-logs" ] && [ ! -d "$WD/daily-logs" ]; then
     skip "daily-logs exists but is not a directory — resolve manually"
-  elif [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
+  elif [ -f "$TODAY_LOG" ]; then
+    skip "daily-logs/$TODAY.md exists"
+  elif [ -f "$T/daily-log.md" ]; then
     if mkdir -p "$WD/daily-logs" 2>/dev/null && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" 2>/dev/null; then
       WROTE_PROJECT=1
       ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
@@ -115,7 +118,9 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   fi
   if [ -e "$WD/knowledge" ] && [ ! -d "$WD/knowledge" ]; then
     skip "knowledge exists but is not a directory — resolve manually"
-  elif [ ! -f "$WD/knowledge/README.md" ]; then
+  elif [ -f "$WD/knowledge/README.md" ]; then
+    skip "knowledge/README.md exists"
+  else
     if mkdir -p "$WD/knowledge" 2>/dev/null && cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md" 2>/dev/null; then
       WROTE_PROJECT=1
       ok "knowledge/README.md (the file is truth; memory is a pointer)"
@@ -123,7 +128,9 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
       skip "knowledge/README.md NOT written — cannot write $WD/knowledge"
     fi
   fi
-  if [ ! -f "$WD/watchlist.md" ]; then
+  if [ -f "$WD/watchlist.md" ]; then
+    skip "watchlist.md exists"
+  else
     if [ -e "$WD/watchlist.md" ]; then
       skip "watchlist.md exists but is not a file (directory?) — resolve manually"
     elif cat "$T/watch-list.md" > "$WD/watchlist.md" 2>/dev/null; then

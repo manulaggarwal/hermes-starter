@@ -41,6 +41,7 @@ row() { # label value budget verdict
 bytes() {
   [ -e "$1" ] || { echo "-"; return; }
   [ -f "$1" ] || { echo "unreadable"; return; }
+  [ -r "$1" ] || { echo "unreadable"; return; }
   local N
   N=$(wc -c < "$1" 2>/dev/null) || { echo "unreadable"; return; }
   printf '%s' "$N" | tr -d ' '
@@ -85,7 +86,9 @@ for f in CLAUDE.md AGENTS.md AGENT.md; do
   if [ -f "$f" ]; then
     TIER3_FOUND=$((TIER3_FOUND+1)); FOUND=$((FOUND+1))
     CB=$(bytes "$f")
-    V=""; [ "$CB" -gt 3000 ] 2>/dev/null && { V="${YELLOW}big"; WARN=$((WARN+1)); } || V="${GREEN}ok"
+    if [ "$CB" = "unreadable" ]; then V="${RED}UNREADABLE"; WARN=$((WARN+1))
+    else V="${GREEN}ok"; [ "$CB" -gt 3000 ] 2>/dev/null && { V="${YELLOW}big"; WARN=$((WARN+1)); }
+    fi
     printf '  %-22s %8s   %-14s %b\n' "$f" "${CB}B" "<3000" "$V${RESET}"
   fi
 done
@@ -107,7 +110,9 @@ hdr "Agent memory (small + dense beats large + stale)"
 for M in "$HERMES_HOME/profiles"/*/memories/MEMORY.md "$HERMES_HOME/memories/MEMORY.md"; do
   [ -f "$M" ] || continue
   MB=$(bytes "$M")
-  V=""; [ "$MB" -gt 5000 ] 2>/dev/null && { V="${YELLOW}prune?"; WARN=$((WARN+1)); } || V="${GREEN}ok"
+  if [ "$MB" = "unreadable" ]; then V="${RED}UNREADABLE"; WARN=$((WARN+1))
+  else V="${GREEN}ok"; [ "$MB" -gt 5000 ] 2>/dev/null && { V="${YELLOW}prune?"; WARN=$((WARN+1)); }
+  fi
   printf '  %-22s %8s   %-14s %b\n' "$(echo "$M" | sed "s|$HERMES_HOME/||;s|/memories.*||") memory" "${MB}B" "<5000" "$V${RESET}"
 done
 true
@@ -121,12 +126,12 @@ hdr "Habits (presence, not size)"
 # --- verdict ---
 printf '\n'
 if [ "$FOUND" = "0" ]; then
-  printf '%b✗ nothing found — is HERMES_HOME right? (%s) — run hermes-setup first\n' "$RED" "$HERMES_HOME"
+  printf '%b✗ nothing found — is HERMES_HOME right? (%s) — run hermes-setup first%b\n' "$RED" "$HERMES_HOME" "$RESET"
   exit 2
 elif [ "$WARN" -eq 0 ]; then
-  printf '%b✓ headroom OK — nothing over budget\n' "$GREEN"
+  printf '%b✓ headroom OK — nothing over budget%b\n' "$GREEN" "$RESET"
   exit 0
 else
-  printf '%b⚠ %d warning(s) — trim the OVER rows (one line of constraint beats five aphorisms)\n' "$YELLOW" "$WARN"
+  printf '%b⚠ %d warning(s) — trim the OVER rows (one line of constraint beats five aphorisms)%b\n' "$YELLOW" "$WARN" "$RESET"
   exit 1
 fi

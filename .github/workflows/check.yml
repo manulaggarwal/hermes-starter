@@ -183,3 +183,28 @@ jobs:
           LC_ALL=C grep -q $'\x1b' /tmp/ansi.txt \
             && { echo "::error::raw ANSI in piped output"; exit 1; } || true
           echo "partial-state + ANSI OK"
+      - name: Type-conflict + unreadable tests (round 9)
+        run: |
+          set -e
+          T=$(mktemp -d)
+          # CLAUDE.md as directory → typed message, zero raw errors
+          mkdir -p "$T/proj/CLAUDE.md"
+          printf "N\n%s\nN\n" "$T/proj" \
+            | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/tc.txt 2>&1
+          grep -q "not a file (directory?)" /tmp/tc.txt || { echo "::error::dir-typed CLAUDE.md not typed"; exit 1; }
+          if grep -qE "line [0-9]+:" /tmp/tc.txt; then echo "::error::raw bash error leaked"; exit 1; fi
+          # rerun shows all skip lines (no silent skips)
+          mkdir -p "$T/proj2"
+          printf "N\n%s\nN\n" "$T/proj2" \
+            | HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null 2>&1
+          SKIPS=$(printf "N\n%s\nN\n" "$T/proj2" \
+            | HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/hermes-setup" 2>/dev/null | grep -c "↷" || true)
+          [ "$SKIPS" -ge 6 ] || { echo "::error::rerun shows only $SKIPS skips (want >=6)"; exit 1; }
+          # chmod 000 tier-3 file → UNREADABLE + exit 1
+          mkdir -p "$T/hh3/proj" && cd "$T/proj" 2>/dev/null || cd "$T"
+          mkdir -p "$T/ur" && cd "$T/ur" && printf x > CLAUDE.md && chmod 000 CLAUDE.md
+          CODE=0
+          HERMES_HOME="$T/hh3" bash "$GITHUB_WORKSPACE/bin/headroom-check" > /tmp/ur.txt 2>/dev/null || CODE=$?
+          [ "$CODE" = "1" ] || { echo "::error::unreadable CLAUDE.md exit $CODE (want 1)"; exit 1; }
+          grep -q "UNREADABLE" /tmp/ur.txt || { echo "::error::unreadable not flagged"; exit 1; }
+          echo "type-conflict + unreadable OK"
