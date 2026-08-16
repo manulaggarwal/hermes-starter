@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# headroom-check — measure what HEADROOM.md teaches.
+# Zero dependencies. Read-only. Never sends anything anywhere.
+#
+# Usage:
+#   bin/headroom-check                # auto-detect: ~/.hermes + current dir
+#   bin/headroom-check <profile-dir>  # check a specific profile
+#
+# Exit codes: 0 fine · 1 warnings · 2 nothing found
+set -uo pipefail
+
+GREEN=""; YELLOW=""; RED=""; RESET=""
+[ -t 1 ] && { GREEN="\033[32m"; YELLOW="\033[33m"; RED="\033[31m"; RESET="\033[0m"; }
+
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+PROFILE="${1:-}"
+
+# --- discover profiles ---
+if [ -n "$PROFILE" ]; then
+  PROFILES="$PROFILE"
+elif [ -d "$HERMES_HOME/profiles" ]; then
+  PROFILES=$(find "$HERMES_HOME/profiles" -mindepth 1 -maxdepth 1 -type d | sort)
+else
+  PROFILES=""
+fi
+
+WARN=0
+
+hdr() { printf '\n%s\n' "$*"; }
+row() { # label value budget verdict
+  printf '  %-22s %8s   %-14s %b\n' "$1" "$2" "$3" "$4"
+}
+bytes() { [ -f "$1" ] && wc -c < "$1" | tr -d ' ' || echo "-"; }
+
+# --- global SOUL ---
+hdr "SOUL budget (target: every resident file < 1500 bytes)"
+G="$HERMES_HOME/SOUL.md"
+GB=$(bytes "$G")
+V=""; [ "$GB" != "-" ] && [ "$GB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); } || V="${GREEN}ok"
+if [ "$GB" = "-" ]; then V="${YELLOW}none"; fi
+row "global SOUL.md" "${GB}B" "<1500" "$V${RESET}"
+
+# --- per-profile ---
+if [ -n "$PROFILES" ]; then
+  hdr "Profiles"
+  for P in $PROFILES; do
+    NAME=$(basename "$P")
+    SB=$(bytes "$P/SOUL.md")
+    V=""; [ "$SB" != "-" ] && [ "$SB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); } || V="${GREEN}ok"
+    [ "$SB" = "-" ] && { V="${YELLOW}no SOUL"; }
+    # skills: count + total frontmatter description chars (the always-visible cost)
+    SKILLS=$(find "$P/skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+    printf '  %-22s %8s   %-14s %b  · %s skills\n' "$NAME/SOUL" "${SB}B" "<1500" "$V${RESET}" "$SKILLS"
+  done
+else
+  hdr "Profiles"; printf '  %bno profiles found under %s\n' "${YELLOW}${RESET}" "$HERMES_HOME/profiles"
+fi
+
+# --- project context files (tier 3: auto-loaded, budget like a SOUL) ---
+hdr "Project context files (tier 3 — budget like SOUL)  [cwd: $PWD]"
+for f in CLAUDE.md AGENTS.md AGENT.md; do
+  if [ -f "$f" ]; then
+    CB=$(bytes "$f")
+    V=""; [ "$CB" -gt 3000 ] 2>/dev/null && { V="${YELLOW}big"; WARN=$((WARN+1)); } || V="${GREEN}ok"
+    printf '  %-22s %8s   %-14s %b\n' "$f" "${CB}B" "<3000" "$V${RESET}"
+  fi
+done
+[ -f "CLAUDE.md" ] || [ -f "AGENTS.md" ] || printf '  %bnone in cwd\n' "${YELLOW}${RESET}"
+
+# --- memory ---
+hdr "Agent memory (small + dense beats large + stale)"
+for M in "$HERMES_HOME/profiles"/*/memories/MEMORY.md "$HERMES_HOME/memories/MEMORY.md"; do
+  [ -f "$M" ] || continue
+  MB=$(bytes "$M")
+  V=""; [ "$MB" -gt 5000 ] 2>/dev/null && { V="${YELLOW}prune?"; WARN=$((WARN+1)); } || V="${GREEN}ok"
+  printf '  %-22s %8s   %-14s %b\n' "$(echo "$M" | sed "s|$HERMES_HOME/||;s|/memories.*||") memory" "${MB}B" "<5000" "$V${RESET}"
+done
+true
+
+# --- habits present? ---
+hdr "Habits (presence, not size)"
+[ -d "daily-logs" ] && printf '  %b✓%b daily-logs/ exists\n' "$GREEN" "$RESET" || { printf '  %b·%b no daily-logs/ in cwd\n' "$YELLOW" "$RESET"; }
+[ -f "NEXT.md" ] && printf '  %b✓%b NEXT.md exists\n' "$GREEN" "$RESET" || { printf '  %b·%b no NEXT.md in cwd\n' "$YELLOW" "$RESET"; }
+[ -f "watchlist.md" ] && printf '  %b✓%b watchlist.md exists\n' "$GREEN" "$RESET" || { printf '  %b·%b no watchlist.md in cwd\n' "$YELLOW" "$RESET"; }
+
+# --- verdict ---
+printf '\n'
+if [ "$WARN" -eq 0 ]; then
+  printf '%b✓ headroom OK — nothing over budget\n' "$GREEN"
+  exit 0
+else
+  printf '%b⚠ %d warning(s) — trim the OVER rows (one line of constraint beats five aphorisms)\n' "$YELLOW" "$WARN"
+  exit 1
+fi

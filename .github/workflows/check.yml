@@ -57,3 +57,22 @@ jobs:
           printf "N\nN\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
           grep -q "PRECIOUS" "$HERMES_HOME/SOUL.md" || { echo "::error::clobbered existing SOUL"; exit 1; }
           echo "existing-file protection OK"
+
+      - name: headroom-check smoke test
+        run: |
+          set -e
+          T=$(mktemp -d)
+          export HERMES_HOME="$T/hh"
+          mkdir -p "$HERMES_HOME/profiles/demo" "$T/proj"
+          # healthy setup: small SOULs → exit 0
+          printf 'identity\n' > "$HERMES_HOME/SOUL.md"
+          printf 'stack facts\n' > "$HERMES_HOME/profiles/demo/SOUL.md"
+          cd "$T/proj"
+          printf 'ctx\n' > CLAUDE.md
+          bash "$GITHUB_WORKSPACE/bin/headroom-check" "$HERMES_HOME/profiles/demo" || { echo "::error::healthy setup should exit 0"; exit 1; }
+          # bloated SOUL → exit 1
+          python3 -c "print('x'*2000)" > "$HERMES_HOME/profiles/demo/SOUL.md"
+          if bash "$GITHUB_WORKSPACE/bin/headroom-check" "$HERMES_HOME/profiles/demo" > /dev/null 2>&1; then
+            echo "::error::bloated SOUL should warn (exit 1)"; exit 1
+          fi
+          echo "headroom-check OK (healthy=0, bloated=1)"

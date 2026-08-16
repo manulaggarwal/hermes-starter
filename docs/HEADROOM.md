@@ -57,6 +57,18 @@ Every fact lives in exactly ONE place. Everything else points at it.
 - Repo beats vault. File beats memory. Copy-pasted lists desync — they always
   have, they always will. One canonical file + pointers everywhere else.
 
+## CLAUDE.md / AGENTS.md / .cursorrules — write once, point everywhere
+
+Different agents read differently-named context files (Claude Code: CLAUDE.md;
+Codex & most others: AGENTS.md). **The content should be one set of facts.**
+Write your canonical project context in ONE file, make the others one-line
+pointers to it ("see CLAUDE.md") — or symlink. Two diverging copies of the
+same instructions is the canonicality violation in its most common form.
+
+And remember: these files are tier 3 — auto-loaded every session. A reader
+who takes "disk is cheap" at face value writes a 10KB context file and pays
+for it forever.
+
 ## When a fact outgrows memory
 
 1. Write it to a file (knowledge/, the project repo, wherever it belongs)

@@ -15,6 +15,8 @@
 | **Profile SOUL** | Behavior-first template: your stack facts, not generic personality prose | `<profile>/SOUL.md` |
 | **Project scaffold** | `CLAUDE.md` + `NEXT.md` + `daily-logs/` + `knowledge/` + `watchlist.md` | your project dir |
 | **Obsidian vault** *(optional, prompt-gated)* | 3-folder vault, AGENT.md navigation, canonicality rules, iCloud warning | your vault path |
+| **headroom-check** | Measures what HEADROOM teaches: SOUL sizes vs budget, tier-3 context files, memory bloat, habit presence | `bin/headroom-check` |
+| **setup-review prompt** | Paste into any AI: audits your setup against the HEADROOM principles | `prompts/setup-review.md` |
 
 Everything is plain markdown you own. Idempotent — re-running never clobbers.
 
@@ -27,6 +29,10 @@ bash hermes-starter/bin/hermes-setup
 ```
 
 No dependencies. No accounts. No lock-in.
+
+```bash
+bash hermes-starter/bin/headroom-check   # measure your setup's token budget
+```
 
 ## The philosophy (10 lines)
 

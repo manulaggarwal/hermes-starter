@@ -127,5 +127,7 @@ Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:
 Next steps:
   - EDIT the profile SOUL placeholders (real stack facts, not aphorisms)
   - Write today's first daily-log entry (one paragraph beats none)
+  - Measure your headroom anytime: bash $HERE/bin/headroom-check
+  - Audit your setup with any AI: prompts/setup-review.md
   - For constraint files / evals: github.com/manulaggarwal/wronglist
 EOF
