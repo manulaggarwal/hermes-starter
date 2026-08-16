@@ -16,18 +16,24 @@ ok()  { printf "  ${GREEN}+${RESET} %s\n" "$*"; }
 skip(){ printf "  ${BLUE}↷${RESET} %s\n" "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
 
-# write_tpl TEMPLATE TARGET — honest, atomic template write.
+# write_tpl TEMPLATE TARGET [SED_EXPR] — honest, atomic template write.
 # Never leaves a 0-byte target (writes to a temp sibling, then renames).
 # Never blames permissions when the template itself is the problem.
 # Skips typed conflicts (target exists as non-file). Returns 0 on success.
+# SED_EXPR, if given, runs the template through `sed` (e.g. {{DATE}} fill-in)
+# instead of a plain copy — the one other write path stays on this same rail.
 write_tpl() {
-  local tpl="$1" tgt="$2" tmp
+  local tpl="$1" tgt="$2" sed_expr="${3:-}" tmp
   [ -f "$tpl" ] || { skip "template missing — $tpl (broken install?)"; return 1; }
   [ -e "$tgt" ] && [ ! -f "$tgt" ] && { skip "$tgt exists but is not a file (directory?) — resolve manually"; return 1; }
   tmp="$tgt.hermes-tmp.$$"
   # note: 2>/dev/null BEFORE > "$tmp" — errors on tmp creation are suppressed,
   # and the raw redirect failure can never leak to the user's terminal.
-  if cat "$tpl" 2>/dev/null > "$tmp" && mv -f "$tmp" "$tgt" 2>/dev/null; then
+  if [ -n "$sed_expr" ]; then
+    if sed "$sed_expr" "$tpl" 2>/dev/null > "$tmp" && mv -f "$tmp" "$tgt" 2>/dev/null; then
+      return 0
+    fi
+  elif cat "$tpl" 2>/dev/null > "$tmp" && mv -f "$tmp" "$tgt" 2>/dev/null; then
     return 0
   fi
   rm -f "$tmp" 2>/dev/null
@@ -135,13 +141,10 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   elif [ -e "$TODAY_LOG" ]; then
     skip "daily-logs/$TODAY.md exists but is not a file (directory?) — resolve manually"
   elif [ -f "$T/daily-log.md" ]; then
-    DL_TMP="$TODAY_LOG.hermes-tmp.$$"
-    if mkdir -p "$WD/daily-logs" 2>/dev/null && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" 2>/dev/null > "$DL_TMP" && mv -f "$DL_TMP" "$TODAY_LOG" 2>/dev/null; then
+    mkdir -p "$WD/daily-logs" 2>/dev/null || true
+    if write_tpl "$T/daily-log.md" "$TODAY_LOG" "s/{{DATE}}/$TODAY/"; then
       WROTE_PROJECT=1
       ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
-    else
-      rm -f "$DL_TMP" 2>/dev/null
-      skip "daily-log NOT seeded — cannot write $WD/daily-logs"
     fi
   else
     skip "daily-log template missing — $T/daily-log.md not found"

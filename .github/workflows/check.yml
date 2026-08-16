@@ -4,7 +4,16 @@ on: [push, pull_request]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-latest ships a modern bash; macos-latest still ships Apple's
+        # stock bash 3.2 (GPLv3-frozen) — the exact interpreter CLAUDE.md
+        # locks in as a support target. The "POSIX-mode parse" step below is
+        # a syntax check only; running the full suite here is what actually
+        # proves bash-3.2 compatibility instead of just approximating it.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Syntax
