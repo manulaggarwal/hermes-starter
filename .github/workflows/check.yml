@@ -31,7 +31,12 @@ jobs:
           cd "$T"
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
           OUT=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup")
-          PLUS=$(printf '%s' "$OUT" | grep -c '^  + ' || true)
+          # first run MUST write files: count ok() lines (ANSI-gated → plain when piped)
+          FIRST=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" | tee /tmp/first.txt)
+          PLUS1=$(grep -c '^  + ' /tmp/first.txt || true)
+          [ "$PLUS1" -gt 5 ] || { echo "::error::first run wrote only $PLUS1 items — expected >5"; cat /tmp/first.txt; exit 1; }
+          # rerun must write NOTHING new
+          OUT=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup")
           [ "$PLUS" = "0" ] || { echo "::error::rerun wrote $PLUS new files — not idempotent"; exit 1; }
           echo "idempotency OK"
       - name: Skip paths (N answers)

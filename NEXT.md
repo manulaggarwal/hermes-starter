@@ -1,12 +1,13 @@
 # Next actions
 
-*Update at the end of every session. Three buckets, max 5 items each.*
-
 ## Do now
-- [ ]
+- [ ] Friend validation: send repo link, 15-min silent screenshare each
 
 ## Next
-- [ ]
+- [ ] v0.2 from friend feedback
+- [ ] Consider npm publish (hermes-setup name is taken — would need scoping)
 
 ## Parked (with revisit triggers)
-- [ ] <thing> — revisit when: <measurable condition>
+- [ ] Cron verifier template — revisit when: a friend asks for automation twice
+- [ ] AGENT.md in project scaffold — revisit when: users report vault-first workflows
+- [ ] Non-Hermes adapters (plain Claude Code) — revisit when: 3+ non-Hermes users ask

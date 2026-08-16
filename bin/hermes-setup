@@ -10,7 +10,8 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 T="$HERE/templates"
 
 say() { printf '%s\n' "$*"; }
-ok()  { printf '  \033[32m+\033[0m %s\n' "$*"; }
+GREEN=""; [ -t 1 ] && GREEN="\033[32m"; RESET=""; [ -t 1 ] && RESET="\033[0m"
+ok()  { printf "  ${GREEN}+${RESET} %s\n" "$*"; }
 skip(){ printf '  \033[34m↷\033[0m %s\n' "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
 
@@ -40,7 +41,9 @@ if [ -z "$PROFILE" ]; then
   ask "Profile directory to set up (e.g. ~/.hermes/profiles/main — Enter to skip):"
   PROFILE="${REPLY/#\~/$HOME}"
 fi
-if [ -n "$PROFILE" ] && [ -d "$PROFILE" ]; then
+if [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
+  skip "$PROFILE doesn't exist yet — create it (or run hermes) and rerun setup"
+elif [ -n "$PROFILE" ]; then
   if [ -f "$PROFILE/SOUL.md" ]; then
     skip "$PROFILE/SOUL.md exists — leaving untouched (see templates/soul-profile.md)"
   else
@@ -53,11 +56,13 @@ else
 fi
 
 # ---------- 3. durable memory: knowledge/ + daily-logs/ in the working project ----------
-ask "Set up a project scaffold in '$PWD'? (path to use another dir, N to skip)"
+ask "Project dir [Enter = $PWD]. N to skip:"
 REPLY_UP=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
+if [ "$REPLY_UP" = "Y" ] || [ "$REPLY_UP" = "YES" ]; then REPLY=""; fi
 if [ -z "${REPLY:-}" ] || [ "$REPLY_UP" != "N" ]; then
   WD="${REPLY:-$PWD}"
   WD="${WD/#\~/$HOME}"
+  WD="${WD%/}"
   if [ ! -d "$WD" ]; then
     skip "$WD does not exist — create it first, or answer with an existing dir"
   else
@@ -65,10 +70,19 @@ if [ -z "${REPLY:-}" ] || [ "$REPLY_UP" != "N" ]; then
     if [ -f "$WD/$f" ]; then skip "$f exists"; else cat "$T/project-$f" > "$WD/$f"; ok "$f"; fi
   done
   mkdir -p "$WD/daily-logs" "$WD/knowledge"
-  [ -f "$WD/knowledge/README.md" ] || cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md"
-  ok "daily-logs/ + knowledge/ (the file is truth; memory is a pointer)"
-  [ -f "$WD/watchlist.md" ] || cat "$T/watch-list.md" > "$WD/watchlist.md"
-  ok "watchlist.md (deferred adoptions with revisit triggers)"
+  TODAY_LOG="$WD/daily-logs/$(date +%F).md"
+  if [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
+    sed "s/{{DATE}}/$(date +%F)/" "$T/daily-log.md" > "$TODAY_LOG"
+    ok "daily-logs/$(date +%F).md (today's log, seeded — write one paragraph before bed)"
+  fi
+  if [ ! -f "$WD/knowledge/README.md" ]; then
+    cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md"
+    ok "knowledge/README.md (the file is truth; memory is a pointer)"
+  fi
+  if [ ! -f "$WD/watchlist.md" ]; then
+    cat "$T/watch-list.md" > "$WD/watchlist.md"
+    ok "watchlist.md (deferred adoptions with revisit triggers)"
+  fi
   fi
 else
   skip "project scaffold"
@@ -81,7 +95,9 @@ REPLY_UP2=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$REPLY_UP2" = "Y" ]; then
   ask "Vault path (a NEW folder — the installer will create it):"
   VAULT="${REPLY/#\~/$HOME}"
-  if [ -e "$VAULT" ] && [ -n "$(ls -A "$VAULT" 2>/dev/null | head -1)" ]; then
+  if [ -z "$VAULT" ]; then
+    skip "Obsidian skipped (no path given — rerun setup to add it later)"
+  elif [ -e "$VAULT" ] && [ -n "$(ls -A "$VAULT" 2>/dev/null | head -1)" ]; then
     skip "$VAULT is not empty — not scaffolding into an existing vault"
   else
     mkdir -p "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily"
@@ -106,7 +122,7 @@ Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:
   1. An agent that sounds like someone decided how it should talk (global SOUL)
   2. Files that outlive the session (daily-logs/, knowledge/)
   3. An agent that picks them back up next session (NEXT.md + CLAUDE.md)
-  4. Token headroom from day one  → read docs/HEADROOM.md — the one doc to read
+  4. Token headroom from day one → read $HERE/docs/HEADROOM.md — the one doc to read
 
 Next steps:
   - EDIT the profile SOUL placeholders (real stack facts, not aphorisms)

@@ -14,7 +14,7 @@
 | **Global SOUL** | Channel rules inherited by every profile (the highest-leverage file in the system) | `~/.hermes/SOUL.md` |
 | **Profile SOUL** | Behavior-first template: your stack facts, not generic personality prose | `<profile>/SOUL.md` |
 | **Project scaffold** | `CLAUDE.md` + `NEXT.md` + `daily-logs/` + `knowledge/` + `watchlist.md` | your project dir |
-| **Obsidian vault** *(optional, flag-gated)* | 3-folder vault, AGENT.md navigation, canonicality rules, iCloud warning | your vault path |
+| **Obsidian vault** *(optional, prompt-gated)* | 3-folder vault, AGENT.md navigation, canonicality rules, iCloud warning | your vault path |
 
 Everything is plain markdown you own. Idempotent — re-running never clobbers.
 
@@ -23,7 +23,7 @@ Everything is plain markdown you own. Idempotent — re-running never clobbers.
 ```bash
 git clone https://github.com/manulaggarwal/hermes-starter
 bash hermes-starter/bin/hermes-setup
-# answer 3 questions, done
+# answer 4 questions, done
 ```
 
 No dependencies. No accounts. No lock-in.
