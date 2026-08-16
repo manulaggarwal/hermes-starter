@@ -26,19 +26,20 @@ jobs:
       - name: Idempotency (rerun skips everything)
         run: |
           set -e
+          # FRESH dir: first run must write >5 items (assert, don't assume)
           T=$(mktemp -d)
           mkdir -p "$T/profile" "$T/proj" "$T/vault"
           cd "$T"
-          printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
-          OUT=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup")
-          # first run MUST write files: count ok() lines (ANSI-gated → plain when piped)
-          FIRST=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" | tee /tmp/first.txt)
+          printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
+            | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/first.txt
           PLUS1=$(grep -c '^  + ' /tmp/first.txt || true)
           [ "$PLUS1" -gt 5 ] || { echo "::error::first run wrote only $PLUS1 items — expected >5"; cat /tmp/first.txt; exit 1; }
-          # rerun must write NOTHING new
-          OUT=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup")
-          [ "$PLUS" = "0" ] || { echo "::error::rerun wrote $PLUS new files — not idempotent"; exit 1; }
-          echo "idempotency OK"
+          # SAME dir rerun: must write exactly 0 new items
+          printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
+            | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/rerun.txt
+          PLUS2=$(grep -c '^  + ' /tmp/rerun.txt || true)
+          [ "$PLUS2" = "0" ] || { echo "::error::rerun wrote $PLUS2 new items — not idempotent"; cat /tmp/rerun.txt; exit 1; }
+          echo "idempotency OK (first run: $PLUS1 items, rerun: 0)"
       - name: Skip paths (N answers)
         run: |
           set -e
