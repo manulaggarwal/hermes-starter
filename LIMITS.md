@@ -17,3 +17,11 @@
    installer skips what exists and tells you what it would have written.
    Adopting patterns from templates is manual — deliberately, so you read
    what you adopt.
+6. **Platforms: it's a bash script, not a native Windows one.** macOS and
+   Linux are CI-tested on every push (`ubuntu-latest` and `macos-latest`,
+   including real bash 3.2). Windows via **WSL** should work identically —
+   WSL is a real Linux userspace, the same code path as the Linux CI leg.
+   Native `cmd.exe`/PowerShell can't run this at all (no bash). **Git Bash**
+   is untested: several checks here (`chmod 555` → "not writable", etc.)
+   rely on Unix permission bits, which Git Bash simulates loosely over
+   NTFS — behavior there may not match what the CI asserts.

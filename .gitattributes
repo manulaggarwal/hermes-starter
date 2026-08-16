@@ -1,0 +1,6 @@
+# Force LF regardless of a contributor's core.autocrlf setting. Git for
+# Windows' installer defaults autocrlf=true, which would otherwise convert
+# the shebang line (#!/usr/bin/env bash) to end in \r on checkout — the
+# single most common way a bash script silently breaks on Windows.
+* text=auto eol=lf
+bin/* text eol=lf

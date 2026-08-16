@@ -35,6 +35,11 @@ all of it.
 
 No dependencies. No accounts. No lock-in.
 
+**Platforms:** macOS and Linux, CI-tested on every push. On Windows, run it
+from **WSL** (works the same as Linux) — Git Bash isn't tested and native
+`cmd.exe`/PowerShell can't run a bash script at all. Details in
+[LIMITS.md](LIMITS.md).
+
 ```bash
 bash hermes-starter/bin/headroom-check   # measure your setup's token budget
 ```
