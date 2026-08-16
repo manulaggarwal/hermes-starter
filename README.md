@@ -25,7 +25,7 @@ Everything is plain markdown you own. Idempotent — re-running never clobbers.
 ```bash
 git clone https://github.com/manulaggarwal/hermes-starter
 bash hermes-starter/bin/hermes-setup
-# answer 4 questions, done
+# answer 3-4 questions, done
 ```
 
 No dependencies. No accounts. No lock-in.
@@ -53,8 +53,7 @@ bash hermes-starter/bin/headroom-check   # measure your setup's token budget
 
 ## Limits
 
-- The templates are calibrated to one operator's system (solo dev, Hermes + Claude Code + Obsidian). Yours will differ — the templates say EDIT ME for a reason.
-- No cron/tooling in v1 — deliberately. Conventions first; infrastructure when a convention hurts.
+Honest and full in [LIMITS.md](LIMITS.md) — template calibration, deferred tooling, and what's untested. Read it before adopting.
 
 ## License
 

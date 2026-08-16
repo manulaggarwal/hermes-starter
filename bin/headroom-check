@@ -33,14 +33,19 @@ row() { # label value budget verdict
 }
 bytes() {
   [ -e "$1" ] || { echo "-"; return; }
-  wc -c < "$1" 2>/dev/null | tr -d ' ' || echo "unreadable"
+  [ -f "$1" ] || { echo "unreadable"; return; }
+  local N
+  N=$(wc -c < "$1" 2>/dev/null) || { echo "unreadable"; return; }
+  printf '%s' "$N" | tr -d ' '
 }
 
 # --- global SOUL ---
 hdr "SOUL budget (target: every resident file < 1500 bytes)"
 G="$HERMES_HOME/SOUL.md"
 GB=$(bytes "$G")
-if [ "$GB" = "-" ]; then V="${YELLOW}none"; else FOUND=$((FOUND+1));
+if [ "$GB" = "-" ]; then V="${YELLOW}none"
+elif [ "$GB" = "unreadable" ]; then V="${RED}UNREADABLE"; WARN=$((WARN+1)); FOUND=$((FOUND+1))
+else FOUND=$((FOUND+1));
   V="${GREEN}ok"; [ "$GB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); }
 fi
 row "global SOUL.md" "${GB}B" "<1500" "$V${RESET}"

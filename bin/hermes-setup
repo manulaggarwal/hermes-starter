@@ -29,9 +29,13 @@ if [ -f "$TARGET_GLOBAL" ] && grep -q "hermes-setup" "$TARGET_GLOBAL" 2>/dev/nul
 elif [ -f "$TARGET_GLOBAL" ]; then
   skip "global SOUL.md exists — leaving untouched (edit manually to adopt the template)"
   say "    (see templates/soul-global.md for the pattern)"
+elif [ -f "$HERMES_HOME" ]; then
+  skip "HERMES_HOME ($HERMES_HOME) is a FILE, not a directory — fix your environment"
+elif [ -d "$HERMES_HOME" ] && [ ! -w "$HERMES_HOME" ]; then
+  skip "HERMES_HOME ($HERMES_HOME) is not writable — check permissions"
 else
-  mkdir -p "$HERMES_HOME"
-  cat "$T/soul-global.md" > "$TARGET_GLOBAL"
+  mkdir -p "$HERMES_HOME" 2>/dev/null || { skip "cannot create $HERMES_HOME"; }
+  cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null && ok "global SOUL.md written (voice/channel rules, inherited by every profile)" || skip "global SOUL.md NOT written — $HERMES_HOME unwritable"
   ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
 fi
 
@@ -41,6 +45,8 @@ if [ -z "$PROFILE" ]; then
   ask "Profile directory to set up (e.g. ~/.hermes/profiles/main — Enter to skip):"
   PROFILE="${REPLY/#\~/$HOME}"
 fi
+PROFILE_UP=$(printf %s "${PROFILE:-}" | tr "[:lower:]" "[:upper:]")
+if [ "$PROFILE_UP" = "N" ] || [ "$PROFILE_UP" = "NO" ]; then PROFILE=""; fi
 if [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
   skip "$PROFILE doesn't exist yet — create it (or run hermes) and rerun setup"
 elif [ -n "$PROFILE" ]; then
@@ -65,15 +71,19 @@ if [ -z "${REPLY:-}" ] || [ "$REPLY_UP" != "N" ]; then
   WD="${WD%/}"
   if [ ! -d "$WD" ]; then
     skip "$WD does not exist — create it first, or answer with an existing dir"
+  elif [ ! -w "$WD" ]; then
+    skip "$WD is not writable — check permissions"
   else
   for f in CLAUDE.md NEXT.md; do
-    if [ -f "$WD/$f" ]; then skip "$f exists"; else cat "$T/project-$f" > "$WD/$f"; ok "$f"; fi
+    if [ -f "$WD/$f" ]; then skip "$f exists"
+    elif cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then ok "$f"
+    else skip "$f NOT written — $WD unwritable"; fi
   done
   mkdir -p "$WD/daily-logs" "$WD/knowledge"
-  TODAY_LOG="$WD/daily-logs/$(date +%F).md"
+  TODAY=$(date +%F)
+  TODAY_LOG="$WD/daily-logs/$TODAY.md"
   if [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
-    sed "s/{{DATE}}/$(date +%F)/" "$T/daily-log.md" > "$TODAY_LOG"
-    ok "daily-logs/$(date +%F).md (today's log, seeded — write one paragraph before bed)"
+    sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" && ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)" || skip "daily-log NOT seeded — $WD unwritable"
   fi
   if [ ! -f "$WD/knowledge/README.md" ]; then
     cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md"
@@ -115,19 +125,23 @@ else
 fi
 
 # ---------- done ----------
+DID_PROFILE=0; DID_PROJECT=0; DID_VAULT=0
+[ -f "$PROFILE/SOUL.md" ] && [ -n "$PROFILE" ] && DID_PROFILE=1
+[ -f "${WD:-/nonexistent}/CLAUDE.md" ] && DID_PROJECT=1
+[ -f "${VAULT:-/nonexistent}/README.md" ] && DID_VAULT=1
 cat <<EOF
 
 Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:
 
-  1. An agent that sounds like someone decided how it should talk (global SOUL)
-  2. Files that outlive the session (daily-logs/, knowledge/)
-  3. An agent that picks them back up next session (NEXT.md + CLAUDE.md)
+  1. $([ "$DID_PROFILE" = "1" ] && echo "A profile SOUL (behavior-first — EDIT the placeholders)" || echo "-")
+  2. $([ "$DID_PROJECT" = "1" ] && echo "Files that outlive the session (daily-logs/, knowledge/, NEXT.md + CLAUDE.md)" || echo "-")
+  3. $([ "$DID_VAULT" = "1" ] && echo "An Obsidian vault, wired for agent navigation" || echo "-")
   4. Token headroom from day one → read $HERE/docs/HEADROOM.md — the one doc to read
 
 Next steps:
-  - EDIT the profile SOUL placeholders (real stack facts, not aphorisms)
-  - Write today's first daily-log entry (one paragraph beats none)
-  - Measure your headroom anytime: bash $HERE/bin/headroom-check
-  - Audit your setup with any AI: prompts/setup-review.md
-  - For constraint files / evals: github.com/manulaggarwal/wronglist
 EOF
+[ "$DID_PROFILE" = "1" ] && echo "  - EDIT the profile SOUL placeholders (real stack facts, not aphorisms)"
+[ "$DID_PROJECT" = "1" ] && echo "  - Write today's first daily-log entry (one paragraph beats none)"
+echo "  - Measure your headroom anytime: bash $HERE/bin/headroom-check"
+echo "  - Audit your setup with any AI: $HERE/prompts/setup-review.md"
+echo "  - For constraint files / evals: github.com/manulaggarwal/wronglist"

@@ -17,4 +17,5 @@ sentence — what this agent is FOR>.
 - <e.g. "Don't suggest posting tools — the user consumes, doesn't post.">
 
 *Rule: one line of real constraint beats five aphorisms. If a sentence would
-be true for any agent anywhere, delete it. (See docs/HEADROOM.md §SOUL.)*
+be true for any agent anywhere, delete it. (The full budget philosophy lives
+in the hermes-starter repo's docs/HEADROOM.md — "The split" section.)*

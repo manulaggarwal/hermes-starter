@@ -34,7 +34,7 @@ jobs:
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
             | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/first.txt
           PLUS1=$(grep -c '  + ' /tmp/first.txt || true)
-          [ "$PLUS1" -ge 8 ] || { echo "::error::first run wrote only $PLUS1 items — expected >=7"; cat /tmp/first.txt; exit 1; }
+          [ "$PLUS1" -ge 8 ] || { echo "::error::first run wrote only $PLUS1 items — expected >=8"; cat /tmp/first.txt; exit 1; }
           # SAME dir rerun: must write exactly 0 new items
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
             | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/rerun.txt
@@ -45,9 +45,11 @@ jobs:
         run: |
           set -e
           T=$(mktemp -d); cd "$T"
-          printf "\nN\nN\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
-          [ -f "SOUL.md" ] || [ -f "$HOME/.hermes/SOUL.md" ] || true
-          echo "skip path OK (no crash on empty/N)"
+          export HERMES_HOME="$T/hh"   # sandbox: never touch the runner's ~/.hermes
+          printf "\nN\nN\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/skip.txt
+          [ ! -f "CLAUDE.md" ] || { echo "::error::skip-path wrote CLAUDE.md"; exit 1; }
+          grep -q "What you now have" /tmp/skip.txt && { echo "::error::skip-path still congratulates"; exit 1; } || true
+          echo "skip path OK (nothing scaffolded, honest summary)"
       - name: Existing SOUL untouched
         run: |
           set -e
@@ -109,3 +111,10 @@ jobs:
           [ "$HSCODE" = "0" ] || { echo "::error::hermes-setup exited $HSCODE on yes-path"; exit 1; }
           [ -f "$V/README.md" ] || { echo "::error::'yes' at Obsidian prompt did not scaffold"; exit 1; }
           echo "headroom-check OK (healthy=0, bloated=1, empty=2, spaces, divergence, yes-prompt)"
+
+      - name: bash POSIX-mode parse (approximates macOS 3.2 strictness)
+        run: |
+          set -e
+          bash --posix -n "$GITHUB_WORKSPACE/bin/hermes-setup"
+          bash --posix -n "$GITHUB_WORKSPACE/bin/headroom-check"
+          echo "posix parse OK"
