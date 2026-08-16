@@ -83,14 +83,27 @@ jobs:
           # profile path with spaces: measured as ONE profile
           mkdir -p "$T/hh2/profiles/my main profile"
           printf 'x' > "$T/hh2/profiles/my main profile/SOUL.md"
+          set +e
           OUT=$(HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" 2>/dev/null)
+          OUTCODE=$?
+          set -e
           echo "$OUT" | grep -q "my main profile/SOUL" || { echo "::error::spaced profile name not measured"; exit 1; }
+          [ "$OUTCODE" = "1" ] || { echo "::error::spaces run exit $OUTCODE, want 1 (oversized global)"; exit 1; }
           # diverging CLAUDE.md vs AGENTS.md → warned
           mkdir -p "$T/div" && cd "$T/div"
           printf 'canonical A' > CLAUDE.md && printf 'different B' > AGENTS.md
-          HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" 2>/dev/null | grep -q "diverging" || { echo "::error::divergence not flagged"; exit 1; }
+          set +e
+          DIVOUT=$(HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" 2>/dev/null)
+          DIVCODE=$?
+          set -e
+          echo "$DIVOUT" | grep -q "diverging" || { echo "::error::divergence not flagged"; exit 1; }
+          [ "$DIVCODE" = "1" ] || { echo "::error::divergence run exit $DIVCODE, want 1"; exit 1; }
           # 'yes' at Obsidian prompt scaffolds the vault
           V=$(mktemp -d)
-          printf "\nN\nyes\n$V\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
+          set +e
+          printf "\nN\nyes\n$V\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null 2>&1
+          HSCODE=$?
+          set -e
+          [ "$HSCODE" = "0" ] || { echo "::error::hermes-setup exited $HSCODE on yes-path"; exit 1; }
           [ -f "$V/README.md" ] || { echo "::error::'yes' at Obsidian prompt did not scaffold"; exit 1; }
           echo "headroom-check OK (healthy=0, bloated=1, empty=2, spaces, divergence, yes-prompt)"
