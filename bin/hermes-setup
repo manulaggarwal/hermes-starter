@@ -11,9 +11,9 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 T="$HERE/templates"
 
 say() { printf '%s\n' "$*"; }
-GREEN=""; [ -t 1 ] && GREEN="\033[32m"; RESET=""; [ -t 1 ] && RESET="\033[0m"
+GREEN=""; [ -t 1 ] && GREEN="\033[32m"; BLUE=""; [ -t 1 ] && BLUE="\033[34m"; RESET=""; [ -t 1 ] && RESET="\033[0m"
 ok()  { printf "  ${GREEN}+${RESET} %s\n" "$*"; }
-skip(){ printf '  \033[34m↷\033[0m %s\n' "$*"; }
+skip(){ printf "  ${BLUE}↷${RESET} %s\n" "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
 
 # where does this agent live?
@@ -63,6 +63,7 @@ if [ -z "$PROFILE" ]; then
 fi
 PROFILE_UP=$(printf %s "${PROFILE:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$PROFILE_UP" = "N" ] || [ "$PROFILE_UP" = "NO" ]; then PROFILE=""; fi
+PROFILE="${PROFILE%/}"   # normalize like WD/VAULT
 if [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
   skip "$PROFILE doesn't exist yet — create it (or run hermes) and rerun setup"
 elif [ -n "$PROFILE" ]; then
@@ -102,24 +103,31 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   mkdir -p "$WD/daily-logs" "$WD/knowledge" 2>/dev/null || true   # type conflicts handled per-file below
   TODAY=$(date +%F)
   TODAY_LOG="$WD/daily-logs/$TODAY.md"
-  if [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
+  if [ -e "$WD/daily-logs" ] && [ ! -d "$WD/daily-logs" ]; then
+    skip "daily-logs exists but is not a directory — resolve manually"
+  elif [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
     if mkdir -p "$WD/daily-logs" 2>/dev/null && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" 2>/dev/null; then
+      WROTE_PROJECT=1
       ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
     else
-      skip "daily-log NOT seeded — $WD unwritable"
+      skip "daily-log NOT seeded — cannot write $WD/daily-logs"
     fi
   fi
-  if [ ! -f "$WD/knowledge/README.md" ]; then
+  if [ -e "$WD/knowledge" ] && [ ! -d "$WD/knowledge" ]; then
+    skip "knowledge exists but is not a directory — resolve manually"
+  elif [ ! -f "$WD/knowledge/README.md" ]; then
     if mkdir -p "$WD/knowledge" 2>/dev/null && cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md" 2>/dev/null; then
+      WROTE_PROJECT=1
       ok "knowledge/README.md (the file is truth; memory is a pointer)"
     else
-      skip "knowledge/README.md NOT written — $WD unwritable"
+      skip "knowledge/README.md NOT written — cannot write $WD/knowledge"
     fi
   fi
   if [ ! -f "$WD/watchlist.md" ]; then
     if [ -e "$WD/watchlist.md" ]; then
       skip "watchlist.md exists but is not a file (directory?) — resolve manually"
     elif cat "$T/watch-list.md" > "$WD/watchlist.md" 2>/dev/null; then
+      WROTE_PROJECT=1
       ok "watchlist.md (deferred adoptions with revisit triggers)"
     else
       skip "watchlist.md NOT written — $WD unwritable"

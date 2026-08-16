@@ -166,3 +166,20 @@ jobs:
             | HERMES_HOME="$T/hh10" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/no.txt 2>&1
           grep -q "project scaffold" /tmp/no.txt || { echo "::error::'no' at project prompt not recognized as skip"; exit 1; }
           echo "permission paths OK"
+      - name: Partial-state + ANSI tests (round 8)
+        run: |
+          set -e
+          T=$(mktemp -d)
+          # partial project: CLAUDE/NEXT exist, rest missing → summary must CLAIM
+          mkdir -p "$T/part"
+          printf x > "$T/part/CLAUDE.md"; printf x > "$T/part/NEXT.md"
+          printf "N\n%s\nN\n" "$T/part" \
+            | HERMES_HOME="$T/hp" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/part.txt 2>&1
+          grep -q "files written this run" /tmp/part.txt \
+            || { echo "::error::partial run denies writes it made"; exit 1; }
+          # piped output carries NO raw ANSI bytes
+          printf "N\n%s\nN\n" "$T/part" \
+            | HERMES_HOME="$T/hp" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/ansi.txt 2>&1
+          LC_ALL=C grep -q $'\x1b' /tmp/ansi.txt \
+            && { echo "::error::raw ANSI in piped output"; exit 1; } || true
+          echo "partial-state + ANSI OK"
