@@ -75,9 +75,11 @@ jobs:
           if bash "$GITHUB_WORKSPACE/bin/headroom-check" "$HERMES_HOME/profiles/demo" > /dev/null 2>&1; then
             echo "::error::bloated SOUL should warn (exit 1)"; exit 1
           fi
-          # nothing found → exit 2 (not a congratulation)
-          bash "$GITHUB_WORKSPACE/bin/headroom-check" > /dev/null 2>&1; CODE=$?
+          # nothing found → exit 2 (not a congratulation) — run from a NEUTRAL cwd
+          cd "$T"
+          HERMES_HOME=/nonexistent-hermes bash "$GITHUB_WORKSPACE/bin/headroom-check" > /dev/null 2>&1; CODE=$?
           [ "$CODE" = "2" ] || { echo "::error::empty HERMES_HOME should exit 2, got $CODE"; exit 1; }
+          cd "$T/proj"
           # profile path with spaces: measured as ONE profile
           mkdir -p "$T/hh2/profiles/my main profile"
           printf 'x' > "$T/hh2/profiles/my main profile/SOUL.md"
