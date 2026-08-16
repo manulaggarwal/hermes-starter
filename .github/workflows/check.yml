@@ -33,12 +33,12 @@ jobs:
           export HERMES_HOME="$T/hermes-home"   # isolate from earlier steps
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
             | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/first.txt
-          PLUS1=$(grep -c '^  + ' /tmp/first.txt || true)
+          PLUS1=$(grep -c '  + ' /tmp/first.txt || true)
           [ "$PLUS1" -ge 8 ] || { echo "::error::first run wrote only $PLUS1 items — expected >=7"; cat /tmp/first.txt; exit 1; }
           # SAME dir rerun: must write exactly 0 new items
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
             | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/rerun.txt
-          PLUS2=$(grep -c '^  + ' /tmp/rerun.txt || true)
+          PLUS2=$(grep -c '  + ' /tmp/rerun.txt || true)
           [ "$PLUS2" = "0" ] || { echo "::error::rerun wrote $PLUS2 new items — not idempotent"; cat /tmp/rerun.txt; exit 1; }
           echo "idempotency OK (first run: $PLUS1 items, rerun: 0)"
       - name: Skip paths (N answers)
