@@ -73,6 +73,7 @@ else
       V="${GREEN}ok"; [ "$SB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); }
     fi
     SKILLS=$(find "$P/skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$SKILLS" -gt 0 ] 2>/dev/null && FOUND=$((FOUND+1))
     printf '  %-22s %8s   %-14s %b  · %s skills\n' "$NAME/SOUL" "${SB}B" "<1500" "$V${RESET}" "$SKILLS"
   done <<EOF
 $PROFILES_SRC
@@ -114,15 +115,17 @@ for M in "$HERMES_HOME/profiles"/*/memories/MEMORY.md "$HERMES_HOME/memories/MEM
   if [ "$MB" = "unreadable" ]; then V="${RED}UNREADABLE"; WARN=$((WARN+1))
   else V="${GREEN}ok"; [ "$MB" -gt 5000 ] 2>/dev/null && { V="${YELLOW}prune?"; WARN=$((WARN+1)); }
   fi
-  printf '  %-22s %8s   %-14s %b\n' "$(echo "$M" | sed "s|$HERMES_HOME/||;s|/memories.*||") memory" "${MB}B" "<5000" "$V${RESET}"
+  LBL="${M#"$HERMES_HOME"/}"; LBL="${LBL%/memories/MEMORY.md}"
+  [ "$M" = "$HERMES_HOME/memories/MEMORY.md" ] && LBL="global"
+  printf '  %-22s %8s   %-14s %b\n' "$LBL memory" "${MB}B" "<5000" "$V${RESET}"
 done
 true
 
 # --- habits present? ---
 hdr "Habits (presence, not size)"
-[ -d "daily-logs" ] && printf '  %b✓%b daily-logs/ exists\n' "$GREEN" "$RESET" || { printf '  %b·%b no daily-logs/ in cwd\n' "$YELLOW" "$RESET"; }
-[ -f "NEXT.md" ] && printf '  %b✓%b NEXT.md exists\n' "$GREEN" "$RESET" || { printf '  %b·%b no NEXT.md in cwd\n' "$YELLOW" "$RESET"; }
-[ -f "watchlist.md" ] && printf '  %b✓%b watchlist.md exists\n' "$GREEN" "$RESET" || { printf '  %b·%b no watchlist.md in cwd\n' "$YELLOW" "$RESET"; }
+if [ -d "daily-logs" ]; then printf '  %b✓%b daily-logs/ exists\n' "$GREEN" "$RESET"; FOUND=$((FOUND+1)); else printf '  %b·%b no daily-logs/ in cwd\n' "$YELLOW" "$RESET"; fi
+if [ -f "NEXT.md" ]; then printf '  %b✓%b NEXT.md exists\n' "$GREEN" "$RESET"; FOUND=$((FOUND+1)); else printf '  %b·%b no NEXT.md in cwd\n' "$YELLOW" "$RESET"; fi
+if [ -f "watchlist.md" ]; then printf '  %b✓%b watchlist.md exists\n' "$GREEN" "$RESET"; FOUND=$((FOUND+1)); else printf '  %b·%b no watchlist.md in cwd\n' "$YELLOW" "$RESET"; fi
 
 # --- verdict ---
 printf '\n'

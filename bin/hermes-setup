@@ -16,6 +16,25 @@ ok()  { printf "  ${GREEN}+${RESET} %s\n" "$*"; }
 skip(){ printf "  ${BLUE}↷${RESET} %s\n" "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
 
+# write_tpl TEMPLATE TARGET — honest, atomic template write.
+# Never leaves a 0-byte target (writes to a temp sibling, then renames).
+# Never blames permissions when the template itself is the problem.
+# Skips typed conflicts (target exists as non-file). Returns 0 on success.
+write_tpl() {
+  local tpl="$1" tgt="$2" tmp
+  [ -f "$tpl" ] || { skip "template missing — $tpl (broken install?)"; return 1; }
+  [ -e "$tgt" ] && [ ! -f "$tgt" ] && { skip "$tgt exists but is not a file (directory?) — resolve manually"; return 1; }
+  tmp="$tgt.hermes-tmp.$$"
+  # note: 2>/dev/null BEFORE > "$tmp" — errors on tmp creation are suppressed,
+  # and the raw redirect failure can never leak to the user's terminal.
+  if cat "$tpl" 2>/dev/null > "$tmp" && mv -f "$tmp" "$tgt" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null
+  skip "cannot write $tgt"
+  return 1
+}
+
 # where does this agent live?
 # Hermes shells export HERMES_HOME as a PROFILE dir (~/.hermes/profiles/<name>).
 # Detect precisely: a real hermes root already contains profiles/; a profile
@@ -46,12 +65,13 @@ elif [ -f "$HERMES_HOME" ]; then
   skip "HERMES_HOME ($HERMES_HOME) is a FILE, not a directory — fix your environment"
 elif [ -d "$HERMES_HOME" ] && [ ! -w "$HERMES_HOME" ]; then
   skip "HERMES_HOME ($HERMES_HOME) is not writable — check permissions"
+elif [ -e "$TARGET_GLOBAL" ] && [ ! -f "$TARGET_GLOBAL" ]; then
+  skip "$TARGET_GLOBAL exists but is not a file (directory?) — resolve manually"
 else
-  if mkdir -p "$HERMES_HOME" 2>/dev/null && [ -r "$T/soul-global.md" ] && cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null; then
+  mkdir -p "$HERMES_HOME" 2>/dev/null || true
+  if write_tpl "$T/soul-global.md" "$TARGET_GLOBAL"; then
     WROTE_GLOBAL=1
     ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
-  else
-    skip "global SOUL NOT written — cannot create/write $HERMES_HOME"
   fi
 fi
 
@@ -64,19 +84,21 @@ fi
 PROFILE_UP=$(printf %s "${PROFILE:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$PROFILE_UP" = "N" ] || [ "$PROFILE_UP" = "NO" ]; then PROFILE=""; fi
 PROFILE="${PROFILE%/}"   # normalize like WD/VAULT
-if [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
+if [ -n "$PROFILE" ] && [ -e "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
+  skip "$PROFILE exists as a FILE — a profile must be a directory"
+elif [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
   skip "$PROFILE doesn't exist yet — create it (or run hermes) and rerun setup"
 elif [ -n "$PROFILE" ]; then
   if [ ! -w "$PROFILE" ]; then
     skip "$PROFILE is not writable — check permissions"
   elif [ -f "$PROFILE/SOUL.md" ]; then
     skip "$PROFILE/SOUL.md exists — leaving untouched (see templates/soul-profile.md)"
-  elif [ -r "$T/soul-profile.md" ] && cat "$T/soul-profile.md" > "$PROFILE/SOUL.md" 2>/dev/null; then
-    WROTE_PROFILE=1
-    ok "$PROFILE/SOUL.md written (behavior-first template — EDIT the stack constraints)"
-    say "    ⚠ EDIT IT: replace <placeholders> with your real stack facts. 15 minutes."
   else
-    skip "profile SOUL NOT written — $PROFILE unwritable"
+    if write_tpl "$T/soul-profile.md" "$PROFILE/SOUL.md"; then
+      WROTE_PROFILE=1
+      ok "$PROFILE/SOUL.md written (behavior-first template — EDIT the stack constraints)"
+      say "    ⚠ EDIT IT: replace <placeholders> with your real stack facts. 15 minutes."
+    fi
   fi
 else
   skip "profile SOUL skipped (no profile dir given)"
@@ -90,16 +112,18 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   WD="${REPLY:-$PWD}"
   WD="${WD/#\~/$HOME}"
   WD="${WD%/}"
-  if [ ! -d "$WD" ]; then
+  if [ -e "$WD" ] && [ ! -d "$WD" ]; then
+    skip "$WD exists as a FILE — the project must be a directory"
+  elif [ ! -d "$WD" ]; then
     skip "$WD does not exist — create it first, or answer with an existing dir"
   elif [ ! -w "$WD" ]; then
     skip "$WD is not writable — check permissions"
   else
   for f in CLAUDE.md NEXT.md; do
     if [ -f "$WD/$f" ]; then skip "$f exists"
-    elif [ -e "$WD/$f" ]; then skip "$f exists but is not a file (directory?) — resolve manually"
-    elif [ -r "$T/project-$f" ] && cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then WROTE_PROJECT=1; ok "$f"
-    else skip "$f NOT written — cannot write $WD/$f"; fi
+    else
+      if write_tpl "$T/project-$f" "$WD/$f"; then WROTE_PROJECT=1; ok "$f"; fi
+    fi
   done
   mkdir -p "$WD/daily-logs" "$WD/knowledge" 2>/dev/null || true   # type conflicts handled per-file below
   TODAY=$(date +%F)
@@ -111,10 +135,12 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   elif [ -e "$TODAY_LOG" ]; then
     skip "daily-logs/$TODAY.md exists but is not a file (directory?) — resolve manually"
   elif [ -f "$T/daily-log.md" ]; then
-    if mkdir -p "$WD/daily-logs" 2>/dev/null && [ -r "$T/daily-log.md" ] && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" 2>/dev/null; then
+    DL_TMP="$TODAY_LOG.hermes-tmp.$$"
+    if mkdir -p "$WD/daily-logs" 2>/dev/null && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" 2>/dev/null > "$DL_TMP" && mv -f "$DL_TMP" "$TODAY_LOG" 2>/dev/null; then
       WROTE_PROJECT=1
       ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
     else
+      rm -f "$DL_TMP" 2>/dev/null
       skip "daily-log NOT seeded — cannot write $WD/daily-logs"
     fi
   else
@@ -127,23 +153,18 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   elif [ -e "$WD/knowledge/README.md" ]; then
     skip "knowledge/README.md exists but is not a file (directory?) — resolve manually"
   else
-    if mkdir -p "$WD/knowledge" 2>/dev/null && [ -r "$T/knowledge-readme.md" ] && cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md" 2>/dev/null; then
+    mkdir -p "$WD/knowledge" 2>/dev/null || true
+    if write_tpl "$T/knowledge-readme.md" "$WD/knowledge/README.md"; then
       WROTE_PROJECT=1
       ok "knowledge/README.md (the file is truth; memory is a pointer)"
-    else
-      skip "knowledge/README.md NOT written — cannot write $WD/knowledge"
     fi
   fi
   if [ -f "$WD/watchlist.md" ]; then
     skip "watchlist.md exists"
   else
-    if [ -e "$WD/watchlist.md" ]; then
-      skip "watchlist.md exists but is not a file (directory?) — resolve manually"
-    elif [ -r "$T/watch-list.md" ] && cat "$T/watch-list.md" > "$WD/watchlist.md" 2>/dev/null; then
+    if write_tpl "$T/watch-list.md" "$WD/watchlist.md"; then
       WROTE_PROJECT=1
       ok "watchlist.md (deferred adoptions with revisit triggers)"
-    else
-      skip "watchlist.md NOT written — $WD unwritable"
     fi
   fi
   fi
@@ -164,12 +185,13 @@ if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
     skip "$VAULT exists as a FILE — vault must be a (new) directory"
   elif [ -e "$VAULT" ] && [ -n "$(ls -A "$VAULT" 2>/dev/null | head -1)" ]; then
     skip "$VAULT is not empty — not scaffolding into an existing vault"
+  elif [ ! -f "$T/vault-README.md" ] || [ ! -f "$T/vault-agent.md" ] || [ ! -f "$T/vault-index.md" ]; then
+    skip "vault templates missing in $T — broken install; vault left untouched"
   elif ! mkdir -p "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily" 2>/dev/null; then
     skip "vault NOT created — parent of $VAULT unwritable"
-  elif [ -r "$T/vault-README.md" ] && [ -r "$T/vault-agent.md" ] && [ -r "$T/vault-index.md" ] \
-    && cat "$T/vault-README.md" > "$VAULT/README.md" 2>/dev/null \
-    && cat "$T/vault-agent.md" > "$VAULT/01-Projects/AGENT.md" 2>/dev/null \
-    && cat "$T/vault-index.md" > "$VAULT/02-Knowledge/_index.md" 2>/dev/null; then
+  elif write_tpl "$T/vault-README.md" "$VAULT/README.md" \
+    && write_tpl "$T/vault-agent.md" "$VAULT/01-Projects/AGENT.md" \
+    && write_tpl "$T/vault-index.md" "$VAULT/02-Knowledge/_index.md"; then
     WROTE_VAULT=1
     ok "vault scaffolded at $VAULT (3 folders, README, AGENT.md, _index)"
     say ""
@@ -177,7 +199,10 @@ if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
     say "    'Optimize Mac Storage' for it — placeholder eviction corrupts"
     say "    agent writes during sync windows. Local folder = no issue."
   else
-    skip "vault NOT scaffolded — $VAULT unwritable"
+    # rollback: remove only what WE could have created, so a rerun isn't refused
+    rm -f "$VAULT/README.md" "$VAULT/01-Projects/AGENT.md" "$VAULT/02-Knowledge/_index.md" 2>/dev/null
+    rmdir "$VAULT/03-Daily" "$VAULT/02-Knowledge" "$VAULT/01-Projects" "$VAULT" 2>/dev/null || true
+    skip "vault NOT scaffolded (rolled back empty dirs — safe to retry)"
   fi
 else
   skip "Obsidian (plain markdown is the default — you lose nothing)"
