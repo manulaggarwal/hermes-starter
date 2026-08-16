@@ -16,7 +16,16 @@ skip(){ printf '  \033[34m↷\033[0m %s\n' "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
 
 # where does this agent live?
+# NOTE: Hermes shells export HERMES_HOME as a PROFILE dir
+# (~/.hermes/profiles/<name>). The system root is two levels up.
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+case "$HERMES_HOME" in
+  */profiles/*)
+    REAL_HOME=$(dirname "$(dirname "$HERMES_HOME")")
+    printf '  NOTE: HERMES_HOME=%s is a profile dir (Hermes shell). Using %s\n' "$HERMES_HOME" "$REAL_HOME"
+    HERMES_HOME="$REAL_HOME"
+    ;;
+esac
 TARGET_GLOBAL="$HERMES_HOME/SOUL.md"
 
 say "hermes-setup — the starter pack for Hermes Agent"

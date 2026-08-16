@@ -13,6 +13,10 @@ GREEN=""; YELLOW=""; RED=""; RESET=""
 [ -t 1 ] && { GREEN="\033[32m"; YELLOW="\033[33m"; RED="\033[31m"; RESET="\033[0m"; }
 
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+# Hermes shells export HERMES_HOME as a profile dir; walk up to the root
+case "$HERMES_HOME" in
+  */profiles/*) HERMES_HOME=$(dirname "$(dirname "$HERMES_HOME")") ;;
+esac
 PROFILE="${1:-}"
 
 # --- discover profiles (newline-safe: no word splitting on spaces) ---
