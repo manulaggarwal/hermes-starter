@@ -77,7 +77,8 @@ jobs:
           fi
           # nothing found → exit 2 (not a congratulation) — run from a NEUTRAL cwd
           cd "$T"
-          HERMES_HOME=/nonexistent-hermes bash "$GITHUB_WORKSPACE/bin/headroom-check" > /dev/null 2>&1; CODE=$?
+          CODE=0
+          HERMES_HOME=/nonexistent-hermes bash "$GITHUB_WORKSPACE/bin/headroom-check" > /dev/null 2>&1 || CODE=$?
           [ "$CODE" = "2" ] || { echo "::error::empty HERMES_HOME should exit 2, got $CODE"; exit 1; }
           cd "$T/proj"
           # profile path with spaces: measured as ONE profile
