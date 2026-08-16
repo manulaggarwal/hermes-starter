@@ -147,10 +147,15 @@ jobs:
           grep -q "global SOUL NOT written" /tmp/pp3.txt
           if grep -qE "line [0-9]+:" /tmp/pp3.txt; then echo "::error::raw bash error leaked"; exit 1; fi
           chmod 755 "$T/lock"
-          # rerun with pre-existing files → honest authorship denial
+          # rerun with ALL files pre-existing (writable, populated) → honest denial
+          printf 'MY OWN' > "$T/ro-prof/SOUL.md"
+          printf 'MY CLAUDE' > "$T/proj/CLAUDE.md"; printf 'MY NEXT' > "$T/proj/NEXT.md"
+          mkdir -p "$T/proj/knowledge"; printf 'x' > "$T/proj/knowledge/README.md"
+          printf 'x' > "$T/proj/watchlist.md"; mkdir -p "$T/proj/daily-logs"
           printf "%s\n%s\nN\n" "$T/ro-prof" "$T/proj" \
             | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/rerun.txt 2>&1 || true
-          grep -q "nothing new this run" /tmp/rerun.txt || { echo "::error::rerun with all-existing must say 'nothing new this run'"; exit 1; }
+          grep -q "nothing new this run" /tmp/rerun.txt || { echo "::error::rerun with all-existing must say 'nothing new this run"; cat /tmp/rerun.txt; exit 1; }
+          grep -q "MY OWN" "$T/ro-prof/SOUL.md" || { echo "::error::populated profile SOUL clobbered"; exit 1; }
           # daily-logs as FILE must not abort (type conflict)
           mkdir -p "$T/proj3" && touch "$T/proj3/daily-logs"
           printf "\n%s\nN\n" "$T/proj3" \
