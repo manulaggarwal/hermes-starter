@@ -109,6 +109,7 @@ fi
 hdr "Agent memory (small + dense beats large + stale)"
 for M in "$HERMES_HOME/profiles"/*/memories/MEMORY.md "$HERMES_HOME/memories/MEMORY.md"; do
   [ -f "$M" ] || continue
+  FOUND=$((FOUND+1))
   MB=$(bytes "$M")
   if [ "$MB" = "unreadable" ]; then V="${RED}UNREADABLE"; WARN=$((WARN+1))
   else V="${GREEN}ok"; [ "$MB" -gt 5000 ] 2>/dev/null && { V="${YELLOW}prune?"; WARN=$((WARN+1)); }

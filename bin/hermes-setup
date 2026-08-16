@@ -47,7 +47,7 @@ elif [ -f "$HERMES_HOME" ]; then
 elif [ -d "$HERMES_HOME" ] && [ ! -w "$HERMES_HOME" ]; then
   skip "HERMES_HOME ($HERMES_HOME) is not writable — check permissions"
 else
-  if mkdir -p "$HERMES_HOME" 2>/dev/null && cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null; then
+  if mkdir -p "$HERMES_HOME" 2>/dev/null && [ -r "$T/soul-global.md" ] && cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null; then
     WROTE_GLOBAL=1
     ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
   else
@@ -71,7 +71,7 @@ elif [ -n "$PROFILE" ]; then
     skip "$PROFILE is not writable — check permissions"
   elif [ -f "$PROFILE/SOUL.md" ]; then
     skip "$PROFILE/SOUL.md exists — leaving untouched (see templates/soul-profile.md)"
-  elif cat "$T/soul-profile.md" > "$PROFILE/SOUL.md" 2>/dev/null; then
+  elif [ -r "$T/soul-profile.md" ] && cat "$T/soul-profile.md" > "$PROFILE/SOUL.md" 2>/dev/null; then
     WROTE_PROFILE=1
     ok "$PROFILE/SOUL.md written (behavior-first template — EDIT the stack constraints)"
     say "    ⚠ EDIT IT: replace <placeholders> with your real stack facts. 15 minutes."
@@ -98,7 +98,7 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   for f in CLAUDE.md NEXT.md; do
     if [ -f "$WD/$f" ]; then skip "$f exists"
     elif [ -e "$WD/$f" ]; then skip "$f exists but is not a file (directory?) — resolve manually"
-    elif cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then WROTE_PROJECT=1; ok "$f"
+    elif [ -r "$T/project-$f" ] && cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then WROTE_PROJECT=1; ok "$f"
     else skip "$f NOT written — cannot write $WD/$f"; fi
   done
   mkdir -p "$WD/daily-logs" "$WD/knowledge" 2>/dev/null || true   # type conflicts handled per-file below
@@ -108,20 +108,26 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
     skip "daily-logs exists but is not a directory — resolve manually"
   elif [ -f "$TODAY_LOG" ]; then
     skip "daily-logs/$TODAY.md exists"
+  elif [ -e "$TODAY_LOG" ]; then
+    skip "daily-logs/$TODAY.md exists but is not a file (directory?) — resolve manually"
   elif [ -f "$T/daily-log.md" ]; then
-    if mkdir -p "$WD/daily-logs" 2>/dev/null && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" 2>/dev/null; then
+    if mkdir -p "$WD/daily-logs" 2>/dev/null && [ -r "$T/daily-log.md" ] && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" 2>/dev/null; then
       WROTE_PROJECT=1
       ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
     else
       skip "daily-log NOT seeded — cannot write $WD/daily-logs"
     fi
+  else
+    skip "daily-log template missing — $T/daily-log.md not found"
   fi
   if [ -e "$WD/knowledge" ] && [ ! -d "$WD/knowledge" ]; then
     skip "knowledge exists but is not a directory — resolve manually"
   elif [ -f "$WD/knowledge/README.md" ]; then
     skip "knowledge/README.md exists"
+  elif [ -e "$WD/knowledge/README.md" ]; then
+    skip "knowledge/README.md exists but is not a file (directory?) — resolve manually"
   else
-    if mkdir -p "$WD/knowledge" 2>/dev/null && cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md" 2>/dev/null; then
+    if mkdir -p "$WD/knowledge" 2>/dev/null && [ -r "$T/knowledge-readme.md" ] && cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md" 2>/dev/null; then
       WROTE_PROJECT=1
       ok "knowledge/README.md (the file is truth; memory is a pointer)"
     else
@@ -133,7 +139,7 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   else
     if [ -e "$WD/watchlist.md" ]; then
       skip "watchlist.md exists but is not a file (directory?) — resolve manually"
-    elif cat "$T/watch-list.md" > "$WD/watchlist.md" 2>/dev/null; then
+    elif [ -r "$T/watch-list.md" ] && cat "$T/watch-list.md" > "$WD/watchlist.md" 2>/dev/null; then
       WROTE_PROJECT=1
       ok "watchlist.md (deferred adoptions with revisit triggers)"
     else
@@ -160,7 +166,8 @@ if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
     skip "$VAULT is not empty — not scaffolding into an existing vault"
   elif ! mkdir -p "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily" 2>/dev/null; then
     skip "vault NOT created — parent of $VAULT unwritable"
-  elif cat "$T/vault-README.md" > "$VAULT/README.md" 2>/dev/null \
+  elif [ -r "$T/vault-README.md" ] && [ -r "$T/vault-agent.md" ] && [ -r "$T/vault-index.md" ] \
+    && cat "$T/vault-README.md" > "$VAULT/README.md" 2>/dev/null \
     && cat "$T/vault-agent.md" > "$VAULT/01-Projects/AGENT.md" 2>/dev/null \
     && cat "$T/vault-index.md" > "$VAULT/02-Knowledge/_index.md" 2>/dev/null; then
     WROTE_VAULT=1

@@ -208,3 +208,25 @@ jobs:
           [ "$CODE" = "1" ] || { echo "::error::unreadable CLAUDE.md exit $CODE (want 1)"; exit 1; }
           grep -q "UNREADABLE" /tmp/ur.txt || { echo "::error::unreadable not flagged"; exit 1; }
           echo "type-conflict + unreadable OK"
+      - name: Subdir type-conflict + FOUND + template-guard tests (round 10)
+        run: |
+          set -e
+          T=$(mktemp -d)
+          # subdir files as directories → typed messages, no raw errors
+          mkdir -p "$T/proj/daily-logs/$(date +%F).md" "$T/proj/knowledge/README.md"
+          printf "N\n%s\nN\n" "$T/proj" \
+            | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/sub.txt 2>&1
+          grep -q "not a file (directory?)" /tmp/sub.txt || { echo "::error::subdir type-conflict not typed"; exit 1; }
+          if grep -qE "line [0-9]+:" /tmp/sub.txt; then echo "::error::raw bash error leaked"; exit 1; fi
+          # memory-only setup → exit 1 (warned), not 2 (nothing found)
+          mkdir -p "$T/hh2/memories"
+          python3 -c "print('y'*6000)" > "$T/hh2/memories/MEMORY.md"
+          CODE=0
+          (cd "$T" && HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" > /dev/null 2>&1) || CODE=$?
+          [ "$CODE" = "1" ] || { echo "::error::memory-only setup exit $CODE (want 1)"; exit 1; }
+          # template removed → no 0-byte target created
+          mv "$GITHUB_WORKSPACE/templates/soul-global.md" /tmp/sg.bak
+          printf "N\nN\nN\n" | HERMES_HOME="$T/hh3" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null 2>&1 || true
+          mv /tmp/sg.bak "$GITHUB_WORKSPACE/templates/soul-global.md"
+          [ ! -e "$T/hh3/SOUL.md" ] || { echo "::error::0-byte target created on template failure"; exit 1; }
+          echo "round-10 suites OK"
