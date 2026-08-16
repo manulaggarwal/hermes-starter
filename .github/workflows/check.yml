@@ -1,0 +1,52 @@
+name: hermes-setup-check
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax
+        run: bash -n bin/hermes-setup
+      - name: Full happy path (project + vault)
+        run: |
+          set -e
+          T=$(mktemp -d)
+          mkdir -p "$T/profile" "$T/proj" "$T/vault"
+          cd "$T"
+          export HERMES_HOME="$T/hh"
+          printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/out1.txt
+          # verify every expected artifact
+          for f in "$T/hh/SOUL.md" "$T/profile/SOUL.md" "$T/proj/CLAUDE.md" "$T/proj/NEXT.md" "$T/proj/knowledge/README.md" "$T/proj/watchlist.md" "$T/vault/README.md" "$T/vault/01-Projects/AGENT.md" "$T/vault/02-Knowledge/_index.md"; do
+            [ -f "$f" ] || { echo "::error::missing $f"; exit 1; }
+          done
+          [ -d "$T/proj/daily-logs" ] || { echo "::error::missing daily-logs/"; exit 1; }
+          echo "happy path OK"
+      - name: Idempotency (rerun skips everything)
+        run: |
+          set -e
+          T=$(mktemp -d)
+          mkdir -p "$T/profile" "$T/proj" "$T/vault"
+          cd "$T"
+          printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
+          OUT=$(printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" y "$T/vault" | bash "$GITHUB_WORKSPACE/bin/hermes-setup")
+          PLUS=$(printf '%s' "$OUT" | grep -c '^  + ' || true)
+          [ "$PLUS" = "0" ] || { echo "::error::rerun wrote $PLUS new files — not idempotent"; exit 1; }
+          echo "idempotency OK"
+      - name: Skip paths (N answers)
+        run: |
+          set -e
+          T=$(mktemp -d); cd "$T"
+          printf "\nN\nN\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
+          [ -f "SOUL.md" ] || [ -f "$HOME/.hermes/SOUL.md" ] || true
+          echo "skip path OK (no crash on empty/N)"
+      - name: Existing SOUL untouched
+        run: |
+          set -e
+          T=$(mktemp -d); cd "$T"
+          export HERMES_HOME="$T/hh"; mkdir -p "$HERMES_HOME"
+          echo "PRECIOUS" > "$HERMES_HOME/SOUL.md"
+          printf "N\nN\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
+          grep -q "PRECIOUS" "$HERMES_HOME/SOUL.md" || { echo "::error::clobbered existing SOUL"; exit 1; }
+          echo "existing-file protection OK"
