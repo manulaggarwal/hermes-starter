@@ -48,7 +48,8 @@ jobs:
           export HERMES_HOME="$T/hh"   # sandbox: never touch the runner's ~/.hermes
           printf "\nN\nN\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/skip.txt
           [ ! -f "CLAUDE.md" ] || { echo "::error::skip-path wrote CLAUDE.md"; exit 1; }
-          grep -q "What you now have" /tmp/skip.txt && { echo "::error::skip-path still congratulates"; exit 1; } || true
+          grep -q "Files that outlive the session" /tmp/skip.txt && { echo "::error::skip-path claims scaffold that wasn't written"; exit 1; } || true
+          grep -q "A profile SOUL" /tmp/skip.txt && { echo "::error::skip-path claims profile that wasn't written"; exit 1; } || true
           echo "skip path OK (nothing scaffolded, honest summary)"
       - name: Existing SOUL untouched
         run: |
