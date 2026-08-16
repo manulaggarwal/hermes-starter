@@ -3,7 +3,7 @@
 *This is the repo's OWN watch list (the worked example — your project gets a
 blank one from templates/watch-list.md).*
 
-| Item | What it is | Status | Why deferred |
+| Item | What it is | Since | Why deferred |
 |---|---|---|---|
 | Cron verifier template | automation for scheduled agent jobs | 2026-08-16 | no convention hurting yet; wronglist saga says ship surfaces late |
 | AGENT.md in project scaffold | vault-first navigation | 2026-08-16 | CLAUDE.md covers it until a vault exists |

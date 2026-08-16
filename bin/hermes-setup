@@ -1,20 +1,55 @@
 #!/usr/bin/env bash
 # hermes-setup — one command, ten minutes, a complete agent system.
 #
-# Usage: hermes-setup [profile_dir]   (arg skips the profile prompt)
+# Usage: hermes-setup [profile_dir] [options]
+#   -h, --help          show this usage and exit
+#       --dry-run       print what would be written; touch nothing
+#                        (a small number of failure modes — e.g. an
+#                        unwritable vault parent — can only be caught by
+#                        actually running the write, not previewed)
+#       --profile DIR   skip the profile prompt (same as the bare arg)
+#       --project DIR   skip the project-dir prompt
+#       --vault DIR     skip the Obsidian prompt and scaffold at DIR
+# Any prompt not covered by a flag still asks interactively, so piping
+# answers via stdin (as before) keeps working unchanged.
 # Idempotent: never clobbers existing files (skips with ↷).
-# Prompts for the optional Obsidian vault layer.
 # Everything it writes is plain markdown you own. No lock-in.
 set -euo pipefail
+
+usage() { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; }
+
+DRY_RUN=0
+FLAG_PROFILE=""; FLAG_PROJECT=""; FLAG_VAULT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --profile|--project|--vault)
+      [ $# -ge 2 ] || { printf 'missing value for %s\n' "$1" >&2; exit 1; }
+      case "$1" in
+        --profile) FLAG_PROFILE="$2" ;;
+        --project) FLAG_PROJECT="$2" ;;
+        --vault)   FLAG_VAULT="$2" ;;
+      esac
+      shift 2 ;;
+    --) shift; break ;;
+    -*) printf 'unknown option: %s (see --help)\n' "$1" >&2; exit 1 ;;
+    *) break ;;
+  esac
+done
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 T="$HERE/templates"
 
 say() { printf '%s\n' "$*"; }
-GREEN=""; [ -t 1 ] && GREEN="\033[32m"; BLUE=""; [ -t 1 ] && BLUE="\033[34m"; RESET=""; [ -t 1 ] && RESET="\033[0m"
-ok()  { printf "  ${GREEN}+${RESET} %s\n" "$*"; }
+GREEN=""; [ -t 1 ] && GREEN="\033[32m"; BLUE=""; [ -t 1 ] && BLUE="\033[34m"; YELLOW=""; [ -t 1 ] && YELLOW="\033[33m"; RESET=""; [ -t 1 ] && RESET="\033[0m"
+ok()  { if [ "$DRY_RUN" = "1" ]; then printf "  ${YELLOW}~${RESET} (dry-run) %s\n" "$*"; else printf "  ${GREEN}+${RESET} %s\n" "$*"; fi; }
 skip(){ printf "  ${BLUE}↷${RESET} %s\n" "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
+mkd() { [ "$DRY_RUN" = "1" ] && return 0; mkdir -p "$@" 2>/dev/null; }   # dry-run: never touches disk
+not_dir()    { [ -e "$1" ] && [ ! -d "$1" ]; }   # exists but isn't a directory
+not_file()   { [ -e "$1" ] && [ ! -f "$1" ]; }   # exists but isn't a file
+unwritable() { [ -d "$1" ] && [ ! -w "$1" ]; }   # exists as a dir, not writable
 
 # write_tpl TEMPLATE TARGET [SED_EXPR] — honest, atomic template write.
 # Never leaves a 0-byte target (writes to a temp sibling, then renames).
@@ -26,6 +61,7 @@ write_tpl() {
   local tpl="$1" tgt="$2" sed_expr="${3:-}" tmp
   [ -f "$tpl" ] || { skip "template missing — $tpl (broken install?)"; return 1; }
   [ -e "$tgt" ] && [ ! -f "$tgt" ] && { skip "$tgt exists but is not a file (directory?) — resolve manually"; return 1; }
+  [ "$DRY_RUN" = "1" ] && return 0
   tmp="$tgt.hermes-tmp.$$"
   # note: 2>/dev/null BEFORE > "$tmp" — errors on tmp creation are suppressed,
   # and the raw redirect failure can never leak to the user's terminal.
@@ -58,6 +94,7 @@ TARGET_GLOBAL="$HERMES_HOME/SOUL.md"
 WROTE_GLOBAL=0; WROTE_PROFILE=0; WROTE_PROJECT=0; WROTE_VAULT=0
 
 say "hermes-setup — the starter pack for Hermes Agent"
+[ "$DRY_RUN" = "1" ] && say "(dry run — nothing will be written)"
 say "Hermes home: $HERMES_HOME"
 say ""
 
@@ -69,12 +106,12 @@ elif [ -f "$TARGET_GLOBAL" ]; then
   say "    (see templates/soul-global.md for the pattern)"
 elif [ -f "$HERMES_HOME" ]; then
   skip "HERMES_HOME ($HERMES_HOME) is a FILE, not a directory — fix your environment"
-elif [ -d "$HERMES_HOME" ] && [ ! -w "$HERMES_HOME" ]; then
+elif unwritable "$HERMES_HOME"; then
   skip "HERMES_HOME ($HERMES_HOME) is not writable — check permissions"
-elif [ -e "$TARGET_GLOBAL" ] && [ ! -f "$TARGET_GLOBAL" ]; then
+elif not_file "$TARGET_GLOBAL"; then
   skip "$TARGET_GLOBAL exists but is not a file (directory?) — resolve manually"
 else
-  mkdir -p "$HERMES_HOME" 2>/dev/null || true
+  mkd "$HERMES_HOME" || true
   if write_tpl "$T/soul-global.md" "$TARGET_GLOBAL"; then
     WROTE_GLOBAL=1
     ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
@@ -82,15 +119,18 @@ else
 fi
 
 # ---------- 2. first profile SOUL (behavior-first) ----------
-PROFILE="${1:-}"
-if [ -z "$PROFILE" ]; then
+if [ -n "$FLAG_PROFILE" ]; then
+  PROFILE="${FLAG_PROFILE/#\~/$HOME}"
+elif [ -n "${1:-}" ]; then
+  PROFILE="$1"
+else
   ask "Profile directory to set up (e.g. ~/.hermes/profiles/main — Enter to skip):"
   PROFILE="${REPLY/#\~/$HOME}"
 fi
 PROFILE_UP=$(printf %s "${PROFILE:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$PROFILE_UP" = "N" ] || [ "$PROFILE_UP" = "NO" ]; then PROFILE=""; fi
 PROFILE="${PROFILE%/}"   # normalize like WD/VAULT
-if [ -n "$PROFILE" ] && [ -e "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
+if [ -n "$PROFILE" ] && not_dir "$PROFILE"; then
   skip "$PROFILE exists as a FILE — a profile must be a directory"
 elif [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
   skip "$PROFILE doesn't exist yet — create it (or run hermes) and rerun setup"
@@ -111,14 +151,18 @@ else
 fi
 
 # ---------- 3. durable memory: knowledge/ + daily-logs/ in the working project ----------
-ask "Project dir [Enter = $PWD]. N to skip:"
+if [ -n "$FLAG_PROJECT" ]; then
+  REPLY="$FLAG_PROJECT"
+else
+  ask "Project dir [Enter = $PWD]. N to skip:"
+fi
 REPLY_UP=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$REPLY_UP" = "Y" ] || [ "$REPLY_UP" = "YES" ]; then REPLY=""; fi
 if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }; then
   WD="${REPLY:-$PWD}"
   WD="${WD/#\~/$HOME}"
   WD="${WD%/}"
-  if [ -e "$WD" ] && [ ! -d "$WD" ]; then
+  if not_dir "$WD"; then
     skip "$WD exists as a FILE — the project must be a directory"
   elif [ ! -d "$WD" ]; then
     skip "$WD does not exist — create it first, or answer with an existing dir"
@@ -131,17 +175,17 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
       if write_tpl "$T/project-$f" "$WD/$f"; then WROTE_PROJECT=1; ok "$f"; fi
     fi
   done
-  mkdir -p "$WD/daily-logs" "$WD/knowledge" 2>/dev/null || true   # type conflicts handled per-file below
+  mkd "$WD/daily-logs" "$WD/knowledge" || true   # type conflicts handled per-file below
   TODAY=$(date +%F)
   TODAY_LOG="$WD/daily-logs/$TODAY.md"
-  if [ -e "$WD/daily-logs" ] && [ ! -d "$WD/daily-logs" ]; then
+  if not_dir "$WD/daily-logs"; then
     skip "daily-logs exists but is not a directory — resolve manually"
   elif [ -f "$TODAY_LOG" ]; then
     skip "daily-logs/$TODAY.md exists"
   elif [ -e "$TODAY_LOG" ]; then
     skip "daily-logs/$TODAY.md exists but is not a file (directory?) — resolve manually"
   elif [ -f "$T/daily-log.md" ]; then
-    mkdir -p "$WD/daily-logs" 2>/dev/null || true
+    mkd "$WD/daily-logs" || true
     if write_tpl "$T/daily-log.md" "$TODAY_LOG" "s/{{DATE}}/$TODAY/"; then
       WROTE_PROJECT=1
       ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
@@ -149,14 +193,14 @@ if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }
   else
     skip "daily-log template missing — $T/daily-log.md not found"
   fi
-  if [ -e "$WD/knowledge" ] && [ ! -d "$WD/knowledge" ]; then
+  if not_dir "$WD/knowledge"; then
     skip "knowledge exists but is not a directory — resolve manually"
   elif [ -f "$WD/knowledge/README.md" ]; then
     skip "knowledge/README.md exists"
   elif [ -e "$WD/knowledge/README.md" ]; then
     skip "knowledge/README.md exists but is not a file (directory?) — resolve manually"
   else
-    mkdir -p "$WD/knowledge" 2>/dev/null || true
+    mkd "$WD/knowledge" || true
     if write_tpl "$T/knowledge-readme.md" "$WD/knowledge/README.md"; then
       WROTE_PROJECT=1
       ok "knowledge/README.md (the file is truth; memory is a pointer)"
@@ -177,20 +221,28 @@ fi
 
 # ---------- 4. optional Obsidian layer ----------
 echo
-ask "Obsidian vault? Answer yes ONLY if you already use Obsidian. (y/N)"
-REPLY_UP2=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
+if [ -n "$FLAG_VAULT" ]; then
+  REPLY_UP2="Y"
+else
+  ask "Obsidian vault? Answer yes ONLY if you already use Obsidian. (y/N)"
+  REPLY_UP2=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
+fi
 if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
-  ask "Vault path (a NEW folder — the installer will create it):"
+  if [ -n "$FLAG_VAULT" ]; then
+    REPLY="$FLAG_VAULT"
+  else
+    ask "Vault path (a NEW folder — the installer will create it):"
+  fi
   VAULT="${REPLY/#\~/$HOME}"; VAULT="${VAULT%/}"
   if [ -z "$VAULT" ]; then
     skip "Obsidian skipped (no path given — rerun setup to add it later)"
-  elif [ -e "$VAULT" ] && [ ! -d "$VAULT" ]; then
+  elif not_dir "$VAULT"; then
     skip "$VAULT exists as a FILE — vault must be a (new) directory"
-  elif [ -e "$VAULT" ] && [ -n "$(ls -A "$VAULT" 2>/dev/null | head -1)" ]; then
+  elif [ -e "$VAULT" ] && [ -n "$(find "$VAULT" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
     skip "$VAULT is not empty — not scaffolding into an existing vault"
   elif [ ! -f "$T/vault-README.md" ] || [ ! -f "$T/vault-agent.md" ] || [ ! -f "$T/vault-index.md" ]; then
     skip "vault templates missing in $T — broken install; vault left untouched"
-  elif ! mkdir -p "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily" 2>/dev/null; then
+  elif ! mkd "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily"; then
     skip "vault NOT created — parent of $VAULT unwritable"
   elif write_tpl "$T/vault-README.md" "$VAULT/README.md" \
     && write_tpl "$T/vault-agent.md" "$VAULT/01-Projects/AGENT.md" \
@@ -212,12 +264,19 @@ else
 fi
 
 # ---------- done ----------
+if [ "$DRY_RUN" = "1" ]; then
+  DONE_LINE="Dry run in $((SECONDS/60))m$((SECONDS%60))s — nothing written. What WOULD happen:"
+  ITEM2_WROTE="Profile/project files that WOULD be written this run (see ~ lines above)"
+else
+  DONE_LINE="Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:"
+  ITEM2_WROTE="Profile/project files written this run (see + lines above)"
+fi
 cat <<EOF
 
-Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:
+$DONE_LINE
 
   1. $([ "$WROTE_GLOBAL" = "1" ] && echo "A global SOUL (channel rules — every profile inherits it)" || echo "-")
-  2. $([ "$WROTE_PROFILE$WROTE_PROJECT" != "00" ] && echo "Profile/project files written this run (see + lines above)" || echo "- (nothing new this run — existing files were left untouched)")
+  2. $([ "$WROTE_PROFILE$WROTE_PROJECT" != "00" ] && echo "$ITEM2_WROTE" || echo "- (nothing new this run — existing files were left untouched)")
   3. $([ "$WROTE_VAULT" = "1" ] && echo "An Obsidian vault, wired for agent navigation" || echo "-")
   4. Token headroom from day one → read $HERE/docs/HEADROOM.md — the one doc to read
 

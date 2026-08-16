@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Syntax
         run: bash -n bin/hermes-setup
+      - name: shellcheck
+        run: shellcheck -x bin/hermes-setup bin/headroom-check
       - name: Full happy path (project + vault)
         run: |
           set -e

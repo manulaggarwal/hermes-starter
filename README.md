@@ -28,6 +28,11 @@ bash hermes-starter/bin/hermes-setup
 # answer 3-4 questions, done
 ```
 
+Want to see what it would do first? `bin/hermes-setup --dry-run` previews every
+write without touching disk. `--profile`/`--project`/`--vault DIR` skip the
+matching prompt if you'd rather not type paths interactively; `--help` lists
+all of it.
+
 No dependencies. No accounts. No lock-in.
 
 ```bash

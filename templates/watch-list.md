@@ -5,7 +5,7 @@ what you're NOT adopting, and the exact conditions under which you'll
 reconsider. Triggers beat discipline — you will not remember; the checkbox
 will.*
 
-| Item | What it is | Status | Why deferred |
+| Item | What it is | Since | Why deferred |
 |---|---|---|---|
 | <tool/practice> | <one line> | <date> | <one line> |
 
