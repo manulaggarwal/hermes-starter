@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # hermes-setup — one command, ten minutes, a complete agent system.
 #
+# Usage: hermes-setup [profile_dir]   (arg skips the profile prompt)
 # Idempotent: never clobbers existing files (skips with ↷).
 # Prompts for the optional Obsidian vault layer.
 # Everything it writes is plain markdown you own. No lock-in.
@@ -17,10 +18,12 @@ ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer
 
 # where does this agent live?
 # Hermes shells export HERMES_HOME as a PROFILE dir (~/.hermes/profiles/<name>).
-# Detect precisely: a real hermes root always contains profiles/; a profile
-# dir never does. Only then walk up — legit roots with "profiles" in the path
-# are untouched.
+# Detect precisely: a real hermes root already contains profiles/; a profile
+# dir never does. Walk up only then. Edge case: a FRESH root whose path
+# contains /profiles/ before profiles/ exists is indistinguishable — the
+# NOTE below announces the rewrite; rerun after hermes creates profiles/.
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+HERMES_HOME="${HERMES_HOME%/}"
 if [ ! -d "$HERMES_HOME/profiles" ] && case "$HERMES_HOME" in */profiles/*) true ;; *) false ;; esac; then
   REAL_HOME=$(dirname "$(dirname "$HERMES_HOME")")
   printf '  NOTE: HERMES_HOME=%s looks like a profile dir (no profiles/ inside). Using %s\n' "$HERMES_HOME" "$REAL_HOME"
@@ -43,11 +46,11 @@ elif [ -f "$HERMES_HOME" ]; then
 elif [ -d "$HERMES_HOME" ] && [ ! -w "$HERMES_HOME" ]; then
   skip "HERMES_HOME ($HERMES_HOME) is not writable — check permissions"
 else
-  mkdir -p "$HERMES_HOME" 2>/dev/null || { skip "cannot create $HERMES_HOME"; }
-  if cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null; then
+  if mkdir -p "$HERMES_HOME" 2>/dev/null && cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null; then
+    WROTE_GLOBAL=1
     ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
   else
-    skip "global SOUL.md NOT written — $HERMES_HOME unwritable"
+    skip "global SOUL NOT written — cannot create/write $HERMES_HOME"
   fi
 fi
 
@@ -62,12 +65,16 @@ if [ "$PROFILE_UP" = "N" ] || [ "$PROFILE_UP" = "NO" ]; then PROFILE=""; fi
 if [ -n "$PROFILE" ] && [ ! -d "$PROFILE" ]; then
   skip "$PROFILE doesn't exist yet — create it (or run hermes) and rerun setup"
 elif [ -n "$PROFILE" ]; then
-  if [ -f "$PROFILE/SOUL.md" ]; then
+  if [ ! -w "$PROFILE" ]; then
+    skip "$PROFILE is not writable — check permissions"
+  elif [ -f "$PROFILE/SOUL.md" ]; then
     skip "$PROFILE/SOUL.md exists — leaving untouched (see templates/soul-profile.md)"
-  else
-    cat "$T/soul-profile.md" > "$PROFILE/SOUL.md"
+  elif cat "$T/soul-profile.md" > "$PROFILE/SOUL.md" 2>/dev/null; then
+    WROTE_PROFILE=1
     ok "$PROFILE/SOUL.md written (behavior-first template — EDIT the stack constraints)"
     say "    ⚠ EDIT IT: replace <placeholders> with your real stack facts. 15 minutes."
+  else
+    skip "profile SOUL NOT written — $PROFILE unwritable"
   fi
 else
   skip "profile SOUL skipped (no profile dir given)"
@@ -88,22 +95,34 @@ if [ -z "${REPLY:-}" ] || [ "$REPLY_UP" != "N" ]; then
   else
   for f in CLAUDE.md NEXT.md; do
     if [ -f "$WD/$f" ]; then skip "$f exists"
-    elif cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then ok "$f"
+    elif cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then WROTE_PROJECT=1; ok "$f"
     else skip "$f NOT written — $WD unwritable"; fi
   done
   mkdir -p "$WD/daily-logs" "$WD/knowledge"
   TODAY=$(date +%F)
   TODAY_LOG="$WD/daily-logs/$TODAY.md"
   if [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
-    sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" && ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)" || skip "daily-log NOT seeded — $WD unwritable"
+    if mkdir -p "$WD/daily-logs" 2>/dev/null && sed "s/{{DATE}}/$TODAY/" "$T/daily-log.md" > "$TODAY_LOG" 2>/dev/null; then
+      ok "daily-logs/$TODAY.md (today's log, seeded — write one paragraph before bed)"
+    else
+      skip "daily-log NOT seeded — $WD unwritable"
+    fi
   fi
   if [ ! -f "$WD/knowledge/README.md" ]; then
-    cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md"
-    ok "knowledge/README.md (the file is truth; memory is a pointer)"
+    if mkdir -p "$WD/knowledge" 2>/dev/null && cat "$T/knowledge-readme.md" > "$WD/knowledge/README.md" 2>/dev/null; then
+      ok "knowledge/README.md (the file is truth; memory is a pointer)"
+    else
+      skip "knowledge/README.md NOT written — $WD unwritable"
+    fi
   fi
   if [ ! -f "$WD/watchlist.md" ]; then
-    cat "$T/watch-list.md" > "$WD/watchlist.md"
-    ok "watchlist.md (deferred adoptions with revisit triggers)"
+    if [ -e "$WD/watchlist.md" ]; then
+      skip "watchlist.md exists but is not a file (directory?) — resolve manually"
+    elif cat "$T/watch-list.md" > "$WD/watchlist.md" 2>/dev/null; then
+      ok "watchlist.md (deferred adoptions with revisit triggers)"
+    else
+      skip "watchlist.md NOT written — $WD unwritable"
+    fi
   fi
   fi
 else
@@ -119,25 +138,30 @@ if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
   VAULT="${REPLY/#\~/$HOME}"
   if [ -z "$VAULT" ]; then
     skip "Obsidian skipped (no path given — rerun setup to add it later)"
+  elif [ -e "$VAULT" ] && [ ! -d "$VAULT" ]; then
+    skip "$VAULT exists as a FILE — vault must be a (new) directory"
   elif [ -e "$VAULT" ] && [ -n "$(ls -A "$VAULT" 2>/dev/null | head -1)" ]; then
     skip "$VAULT is not empty — not scaffolding into an existing vault"
-  else
-    mkdir -p "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily"
-    cat "$T/vault-README.md"     > "$VAULT/README.md"
-    cat "$T/vault-agent.md"      > "$VAULT/01-Projects/AGENT.md"
-    cat "$T/vault-index.md"      > "$VAULT/02-Knowledge/_index.md"
+  elif ! mkdir -p "$VAULT/01-Projects" "$VAULT/02-Knowledge" "$VAULT/03-Daily" 2>/dev/null; then
+    skip "vault NOT created — parent of $VAULT unwritable"
+  elif cat "$T/vault-README.md" > "$VAULT/README.md" 2>/dev/null \
+    && cat "$T/vault-agent.md" > "$VAULT/01-Projects/AGENT.md" 2>/dev/null \
+    && cat "$T/vault-index.md" > "$VAULT/02-Knowledge/_index.md" 2>/dev/null; then
+    WROTE_VAULT=1
     ok "vault scaffolded at $VAULT (3 folders, README, AGENT.md, _index)"
     say ""
     say "    ⚠ iCloud users: if this vault sits in iCloud Drive, turn OFF"
     say "    'Optimize Mac Storage' for it — placeholder eviction corrupts"
     say "    agent writes during sync windows. Local folder = no issue."
+  else
+    skip "vault NOT scaffolded — $VAULT unwritable"
   fi
 else
   skip "Obsidian (plain markdown is the default — you lose nothing)"
 fi
 
 # ---------- done ----------
-DID_PROFILE=0; DID_PROJECT=0; DID_VAULT=0
+WROTE_GLOBAL=0; WROTE_PROFILE=0; WROTE_PROJECT=0; WROTE_VAULT=0
 [ -f "$PROFILE/SOUL.md" ] && [ -n "$PROFILE" ] && DID_PROFILE=1
 [ -f "${WD:-/nonexistent}/CLAUDE.md" ] && DID_PROJECT=1
 [ -f "${VAULT:-/nonexistent}/README.md" ] && DID_VAULT=1
@@ -145,15 +169,15 @@ cat <<EOF
 
 Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:
 
-  1. $([ "$DID_PROFILE" = "1" ] && echo "A profile SOUL (behavior-first — EDIT the placeholders)" || echo "-")
-  2. $([ "$DID_PROJECT" = "1" ] && echo "Files that outlive the session (daily-logs/, knowledge/, NEXT.md + CLAUDE.md)" || echo "-")
-  3. $([ "$DID_VAULT" = "1" ] && echo "An Obsidian vault, wired for agent navigation" || echo "-")
+  1. $([ "$WROTE_GLOBAL" = "1" ] && echo "A global SOUL (channel rules — every profile inherits it)" || echo "-")
+  2. $([ "$WROTE_PROFILE$WROTE_PROJECT" != "00" ] && echo "Profile/project files written this run (see + lines above)" || echo "- (nothing new this run — existing files were left untouched)")
+  3. $([ "$WROTE_VAULT" = "1" ] && echo "An Obsidian vault, wired for agent navigation" || echo "-")
   4. Token headroom from day one → read $HERE/docs/HEADROOM.md — the one doc to read
 
 Next steps:
 EOF
-[ "$DID_PROFILE" = "1" ] && echo "  - EDIT the profile SOUL placeholders (real stack facts, not aphorisms)"
-[ "$DID_PROJECT" = "1" ] && echo "  - Write today's first daily-log entry (one paragraph beats none)"
+[ "$WROTE_PROFILE" = "1" ] && echo "  - EDIT the profile SOUL placeholders (real stack facts, not aphorisms)"
+[ "$WROTE_PROJECT" = "1" ] && echo "  - Write today's first daily-log entry (one paragraph beats none)"
 echo "  - Measure your headroom anytime: bash $HERE/bin/headroom-check"
 echo "  - Audit your setup with any AI: $HERE/prompts/setup-review.md"
 echo "  - For constraint files / evals: github.com/manulaggarwal/wronglist"

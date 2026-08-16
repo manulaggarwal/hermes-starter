@@ -4,7 +4,7 @@
 - [ ] Friend validation: send repo link, 15-min silent screenshare each
 
 ## Next
-- [ ] v0.3 from friend feedback
+- [ ] v0.4 from friend feedback
 - [ ] Consider npm publish (hermes-setup name is taken — would need scoping)
 
 ## Parked (with revisit triggers)

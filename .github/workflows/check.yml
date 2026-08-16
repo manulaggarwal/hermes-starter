@@ -121,3 +121,29 @@ jobs:
           bash --posix -n "$GITHUB_WORKSPACE/bin/hermes-setup"
           bash --posix -n "$GITHUB_WORKSPACE/bin/headroom-check"
           echo "posix parse OK"
+      - name: Permission-path tests (unwritable dirs never abort)
+        run: |
+          set -e
+          T=$(mktemp -d)
+          # unwritable profile dir → skip, exit 0, summary present
+          mkdir -p "$T/ro-prof" "$T/proj"; chmod 555 "$T/ro-prof"
+          printf "%s\n%s\nN\n" "$T/ro-prof" "$T/proj" \
+            | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/pp.txt 2>&1
+          grep -q "not writable" /tmp/pp.txt && grep -q "What you now have" /tmp/pp.txt
+          chmod 755 "$T/ro-prof"
+          # watchlist as dir → graceful
+          mkdir -p "$T/proj2/watchlist.md"
+          printf "\n%s\nN\n" "$T/proj2" \
+            | HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/pp2.txt 2>&1
+          grep -q "not a file (directory?)" /tmp/pp2.txt
+          # unwritable HERMES_HOME chain → skip, no raw line errors
+          mkdir -p "$T/lock"; chmod 555 "$T/lock"
+          printf "\nN\nN\n" \
+            | HERMES_HOME="$T/lock/x/hermes" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/pp3.txt 2>&1
+          grep -q "global SOUL NOT written" /tmp/pp3.txt
+          if grep -qE "line [0-9]+:" /tmp/pp3.txt; then echo "::error::raw bash error leaked"; exit 1; fi
+          chmod 755 "$T/lock"
+          # rerun with pre-existing files → honest summary
+          printf "%s\n%s\nN\n" "$T/ro-prof" "$T/proj" \
+            | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null 2>&1 || true
+          echo "permission paths OK"
