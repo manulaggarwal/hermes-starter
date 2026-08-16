@@ -144,7 +144,7 @@ jobs:
           mkdir -p "$T/lock"; chmod 555 "$T/lock"
           printf "\nN\nN\n" \
             | HERMES_HOME="$T/lock/x/hermes" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/pp3.txt 2>&1
-          grep -q "global SOUL NOT written" /tmp/pp3.txt
+          grep -qE "cannot write .*SOUL.md|global SOUL NOT written" /tmp/pp3.txt
           if grep -qE "line [0-9]+:" /tmp/pp3.txt; then echo "::error::raw bash error leaked"; exit 1; fi
           chmod 755 "$T/lock"
           # rerun with ALL files pre-existing (writable, populated) → honest denial
