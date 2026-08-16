@@ -30,6 +30,7 @@ if [ ! -d "$HERMES_HOME/profiles" ] && case "$HERMES_HOME" in */profiles/*) true
   HERMES_HOME="$REAL_HOME"
 fi
 TARGET_GLOBAL="$HERMES_HOME/SOUL.md"
+WROTE_GLOBAL=0; WROTE_PROFILE=0; WROTE_PROJECT=0; WROTE_VAULT=0
 
 say "hermes-setup — the starter pack for Hermes Agent"
 say "Hermes home: $HERMES_HOME"
@@ -84,7 +85,7 @@ fi
 ask "Project dir [Enter = $PWD]. N to skip:"
 REPLY_UP=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$REPLY_UP" = "Y" ] || [ "$REPLY_UP" = "YES" ]; then REPLY=""; fi
-if [ -z "${REPLY:-}" ] || [ "$REPLY_UP" != "N" ]; then
+if [ -z "${REPLY:-}" ] || { [ "$REPLY_UP" != "N" ] && [ "$REPLY_UP" != "NO" ]; }; then
   WD="${REPLY:-$PWD}"
   WD="${WD/#\~/$HOME}"
   WD="${WD%/}"
@@ -98,7 +99,7 @@ if [ -z "${REPLY:-}" ] || [ "$REPLY_UP" != "N" ]; then
     elif cat "$T/project-$f" > "$WD/$f" 2>/dev/null; then WROTE_PROJECT=1; ok "$f"
     else skip "$f NOT written — $WD unwritable"; fi
   done
-  mkdir -p "$WD/daily-logs" "$WD/knowledge"
+  mkdir -p "$WD/daily-logs" "$WD/knowledge" 2>/dev/null || true   # type conflicts handled per-file below
   TODAY=$(date +%F)
   TODAY_LOG="$WD/daily-logs/$TODAY.md"
   if [ ! -f "$TODAY_LOG" ] && [ -f "$T/daily-log.md" ]; then
@@ -135,7 +136,7 @@ ask "Obsidian vault? Answer yes ONLY if you already use Obsidian. (y/N)"
 REPLY_UP2=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
 if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
   ask "Vault path (a NEW folder — the installer will create it):"
-  VAULT="${REPLY/#\~/$HOME}"
+  VAULT="${REPLY/#\~/$HOME}"; VAULT="${VAULT%/}"
   if [ -z "$VAULT" ]; then
     skip "Obsidian skipped (no path given — rerun setup to add it later)"
   elif [ -e "$VAULT" ] && [ ! -d "$VAULT" ]; then
@@ -161,10 +162,6 @@ else
 fi
 
 # ---------- done ----------
-WROTE_GLOBAL=0; WROTE_PROFILE=0; WROTE_PROJECT=0; WROTE_VAULT=0
-[ -f "$PROFILE/SOUL.md" ] && [ -n "$PROFILE" ] && DID_PROFILE=1
-[ -f "${WD:-/nonexistent}/CLAUDE.md" ] && DID_PROJECT=1
-[ -f "${VAULT:-/nonexistent}/README.md" ] && DID_VAULT=1
 cat <<EOF
 
 Done in $((SECONDS/60))m$((SECONDS%60))s. What you now have:

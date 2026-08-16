@@ -22,6 +22,10 @@ jobs:
             [ -f "$f" ] || { echo "::error::missing $f"; exit 1; }
           done
           [ -d "$T/proj/daily-logs" ] || { echo "::error::missing daily-logs/"; exit 1; }
+          # POSITIVE summary assertions (round 7: old greps were unfailable)
+          grep -q "A global SOUL" /tmp/out1.txt || { echo "::error::summary missing 'A global SOUL' on a run that wrote it"; exit 1; }
+          grep -q "EDIT the profile SOUL placeholders" /tmp/out1.txt || { echo "::error::EDIT next-step missing on a run that wrote a profile SOUL"; exit 1; }
+          grep -q "Profile/project files written this run" /tmp/out1.txt || { echo "::error::authorship claim missing on a run that scaffolded"; exit 1; }
           echo "happy path OK"
       - name: Idempotency (rerun skips everything)
         run: |
@@ -143,7 +147,17 @@ jobs:
           grep -q "global SOUL NOT written" /tmp/pp3.txt
           if grep -qE "line [0-9]+:" /tmp/pp3.txt; then echo "::error::raw bash error leaked"; exit 1; fi
           chmod 755 "$T/lock"
-          # rerun with pre-existing files → honest summary
+          # rerun with pre-existing files → honest authorship denial
           printf "%s\n%s\nN\n" "$T/ro-prof" "$T/proj" \
-            | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null 2>&1 || true
+            | HERMES_HOME="$T/hh" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/rerun.txt 2>&1 || true
+          grep -q "nothing new this run" /tmp/rerun.txt || { echo "::error::rerun with all-existing must say 'nothing new this run'"; exit 1; }
+          # daily-logs as FILE must not abort (type conflict)
+          mkdir -p "$T/proj3" && touch "$T/proj3/daily-logs"
+          printf "\n%s\nN\n" "$T/proj3" \
+            | HERMES_HOME="$T/hh9" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/typeconf.txt 2>&1
+          grep -q "What you now have" /tmp/typeconf.txt || { echo "::error::daily-logs-as-file aborted the installer"; exit 1; }
+          # 'no' at project prompt must skip, not treat as path
+          printf "\nno\nN\n" \
+            | HERMES_HOME="$T/hh10" bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/no.txt 2>&1
+          grep -q "project scaffold" /tmp/no.txt || { echo "::error::'no' at project prompt not recognized as skip"; exit 1; }
           echo "permission paths OK"
