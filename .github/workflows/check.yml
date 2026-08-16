@@ -84,6 +84,7 @@ jobs:
           # profile path with spaces: measured as ONE profile
           mkdir -p "$T/hh2/profiles/my main profile"
           printf 'x' > "$T/hh2/profiles/my main profile/SOUL.md"
+          python3 -c "print('y'*2000)" > "$T/hh2/SOUL.md"
           set +e
           OUT=$(HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" 2>/dev/null)
           OUTCODE=$?
