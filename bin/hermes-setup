@@ -16,16 +16,16 @@ skip(){ printf '  \033[34m↷\033[0m %s\n' "$*"; }
 ask() { printf '%s ' "$*"; read -r REPLY || REPLY=""; }   # EOF → empty answer (defaults)
 
 # where does this agent live?
-# NOTE: Hermes shells export HERMES_HOME as a PROFILE dir
-# (~/.hermes/profiles/<name>). The system root is two levels up.
+# Hermes shells export HERMES_HOME as a PROFILE dir (~/.hermes/profiles/<name>).
+# Detect precisely: a real hermes root always contains profiles/; a profile
+# dir never does. Only then walk up — legit roots with "profiles" in the path
+# are untouched.
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
-case "$HERMES_HOME" in
-  */profiles/*)
-    REAL_HOME=$(dirname "$(dirname "$HERMES_HOME")")
-    printf '  NOTE: HERMES_HOME=%s is a profile dir (Hermes shell). Using %s\n' "$HERMES_HOME" "$REAL_HOME"
-    HERMES_HOME="$REAL_HOME"
-    ;;
-esac
+if [ ! -d "$HERMES_HOME/profiles" ] && case "$HERMES_HOME" in */profiles/*) true ;; *) false ;; esac; then
+  REAL_HOME=$(dirname "$(dirname "$HERMES_HOME")")
+  printf '  NOTE: HERMES_HOME=%s looks like a profile dir (no profiles/ inside). Using %s\n' "$HERMES_HOME" "$REAL_HOME"
+  HERMES_HOME="$REAL_HOME"
+fi
 TARGET_GLOBAL="$HERMES_HOME/SOUL.md"
 
 say "hermes-setup — the starter pack for Hermes Agent"
@@ -44,8 +44,11 @@ elif [ -d "$HERMES_HOME" ] && [ ! -w "$HERMES_HOME" ]; then
   skip "HERMES_HOME ($HERMES_HOME) is not writable — check permissions"
 else
   mkdir -p "$HERMES_HOME" 2>/dev/null || { skip "cannot create $HERMES_HOME"; }
-  cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null && ok "global SOUL.md written (voice/channel rules, inherited by every profile)" || skip "global SOUL.md NOT written — $HERMES_HOME unwritable"
-  ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
+  if cat "$T/soul-global.md" > "$TARGET_GLOBAL" 2>/dev/null; then
+    ok "global SOUL.md written (voice/channel rules, inherited by every profile)"
+  else
+    skip "global SOUL.md NOT written — $HERMES_HOME unwritable"
+  fi
 fi
 
 # ---------- 2. first profile SOUL (behavior-first) ----------

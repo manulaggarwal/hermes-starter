@@ -34,7 +34,9 @@ jobs:
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
             | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/first.txt
           PLUS1=$(grep -c '  + ' /tmp/first.txt || true)
-          [ "$PLUS1" -ge 8 ] || { echo "::error::first run wrote only $PLUS1 items — expected >=8"; cat /tmp/first.txt; exit 1; }
+          [ "$PLUS1" = "8" ] || { echo "::error::first run wrote $PLUS1 items — expected exactly 8"; cat /tmp/first.txt; exit 1; }
+          GLOBALS=$(grep -c 'global SOUL.md written' /tmp/first.txt || true)
+          [ "$GLOBALS" = "1" ] || { echo "::error::global SOUL written $GLOBALS times — expected 1"; exit 1; }
           # SAME dir rerun: must write exactly 0 new items
           printf "%s\n%s\n%s\n%s\n" "$T/profile" "$T/proj" Y "$T/vault" \
             | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /tmp/rerun.txt

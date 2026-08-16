@@ -18,5 +18,5 @@ This repo is the source of truth. The Obsidian vault mirrors. Repo wins.
 - bash 3.2 compatible; idempotent; never clobber
 
 ## Current phase
-v0.1 shipped + externally reviewed. Next: friend validation round
-(silent screenshares), then v0.2 from what confused them.
+v0.2.3: 5 review rounds done, all blockers fixed, CI green. Next: friend
+validation round (silent screenshares) — v0.3 comes from what confused them.

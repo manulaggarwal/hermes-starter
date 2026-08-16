@@ -13,10 +13,12 @@ GREEN=""; YELLOW=""; RED=""; RESET=""
 [ -t 1 ] && { GREEN="\033[32m"; YELLOW="\033[33m"; RED="\033[31m"; RESET="\033[0m"; }
 
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
-# Hermes shells export HERMES_HOME as a profile dir; walk up to the root
-case "$HERMES_HOME" in
-  */profiles/*) HERMES_HOME=$(dirname "$(dirname "$HERMES_HOME")") ;;
-esac
+# Hermes shells export HERMES_HOME as a profile dir. A real root contains
+# profiles/; a profile dir doesn't. Walk up only when precise — and say so.
+if [ ! -d "$HERMES_HOME/profiles" ] && case "$HERMES_HOME" in */profiles/*) true ;; *) false ;; esac; then
+  printf 'NOTE: HERMES_HOME=%s looks like a profile dir (no profiles/ inside). Using %s\n' "$HERMES_HOME" "$(dirname "$(dirname "$HERMES_HOME")")"
+  HERMES_HOME=$(dirname "$(dirname "$HERMES_HOME")")
+fi
 PROFILE="${1:-}"
 
 # --- discover profiles (newline-safe: no word splitting on spaces) ---
@@ -63,7 +65,9 @@ else
     [ -z "$P" ] && continue
     NAME=$(basename "$P")
     SB=$(bytes "$P/SOUL.md")
-    if [ "$SB" = "-" ] || [ "$SB" = "unreadable" ]; then V="${YELLOW}no SOUL/unreadable"; FOUND=$((FOUND+1)); else FOUND=$((FOUND+1));
+    if [ "$SB" = "-" ]; then V="${YELLOW}no SOUL"
+    elif [ "$SB" = "unreadable" ]; then V="${RED}UNREADABLE"; WARN=$((WARN+1)); FOUND=$((FOUND+1))
+    else FOUND=$((FOUND+1));
       V="${GREEN}ok"; [ "$SB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); }
     fi
     SKILLS=$(find "$P/skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
