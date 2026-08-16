@@ -15,57 +15,78 @@ GREEN=""; YELLOW=""; RED=""; RESET=""
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 PROFILE="${1:-}"
 
-# --- discover profiles ---
+# --- discover profiles (newline-safe: no word splitting on spaces) ---
 if [ -n "$PROFILE" ]; then
-  PROFILES="$PROFILE"
+  PROFILES_SRC=$(printf '%s\n' "$PROFILE")
 elif [ -d "$HERMES_HOME/profiles" ]; then
-  PROFILES=$(find "$HERMES_HOME/profiles" -mindepth 1 -maxdepth 1 -type d | sort)
+  PROFILES_SRC=$(find "$HERMES_HOME/profiles" -mindepth 1 -maxdepth 1 -type d | sort)
 else
-  PROFILES=""
+  PROFILES_SRC=""
 fi
 
 WARN=0
+FOUND=0
 
 hdr() { printf '\n%s\n' "$*"; }
 row() { # label value budget verdict
   printf '  %-22s %8s   %-14s %b\n' "$1" "$2" "$3" "$4"
 }
-bytes() { [ -f "$1" ] && wc -c < "$1" | tr -d ' ' || echo "-"; }
+bytes() {
+  [ -e "$1" ] || { echo "-"; return; }
+  wc -c < "$1" 2>/dev/null | tr -d ' ' || echo "unreadable"
+}
 
 # --- global SOUL ---
 hdr "SOUL budget (target: every resident file < 1500 bytes)"
 G="$HERMES_HOME/SOUL.md"
 GB=$(bytes "$G")
-V=""; [ "$GB" != "-" ] && [ "$GB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); } || V="${GREEN}ok"
-if [ "$GB" = "-" ]; then V="${YELLOW}none"; fi
+if [ "$GB" = "-" ]; then V="${YELLOW}none"; else FOUND=$((FOUND+1));
+  V="${GREEN}ok"; [ "$GB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); }
+fi
 row "global SOUL.md" "${GB}B" "<1500" "$V${RESET}"
 
 # --- per-profile ---
-if [ -n "$PROFILES" ]; then
-  hdr "Profiles"
-  for P in $PROFILES; do
+hdr "Profiles"
+if [ -z "$PROFILES_SRC" ]; then
+  printf '  %bno profiles found under %s\n' "${YELLOW}${RESET}" "$HERMES_HOME/profiles"
+else
+  while IFS= read -r P; do
+    [ -z "$P" ] && continue
     NAME=$(basename "$P")
     SB=$(bytes "$P/SOUL.md")
-    V=""; [ "$SB" != "-" ] && [ "$SB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); } || V="${GREEN}ok"
-    [ "$SB" = "-" ] && { V="${YELLOW}no SOUL"; }
-    # skills: count + total frontmatter description chars (the always-visible cost)
+    if [ "$SB" = "-" ] || [ "$SB" = "unreadable" ]; then V="${YELLOW}no SOUL/unreadable"; FOUND=$((FOUND+1)); else FOUND=$((FOUND+1));
+      V="${GREEN}ok"; [ "$SB" -gt 1500 ] 2>/dev/null && { V="${RED}OVER"; WARN=$((WARN+1)); }
+    fi
     SKILLS=$(find "$P/skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
     printf '  %-22s %8s   %-14s %b  · %s skills\n' "$NAME/SOUL" "${SB}B" "<1500" "$V${RESET}" "$SKILLS"
-  done
-else
-  hdr "Profiles"; printf '  %bno profiles found under %s\n' "${YELLOW}${RESET}" "$HERMES_HOME/profiles"
+  done <<EOF
+$PROFILES_SRC
+EOF
 fi
 
 # --- project context files (tier 3: auto-loaded, budget like a SOUL) ---
 hdr "Project context files (tier 3 — budget like SOUL)  [cwd: $PWD]"
+TIER3_FOUND=0
 for f in CLAUDE.md AGENTS.md AGENT.md; do
   if [ -f "$f" ]; then
+    TIER3_FOUND=$((TIER3_FOUND+1)); FOUND=$((FOUND+1))
     CB=$(bytes "$f")
     V=""; [ "$CB" -gt 3000 ] 2>/dev/null && { V="${YELLOW}big"; WARN=$((WARN+1)); } || V="${GREEN}ok"
     printf '  %-22s %8s   %-14s %b\n' "$f" "${CB}B" "<3000" "$V${RESET}"
   fi
 done
-[ -f "CLAUDE.md" ] || [ -f "AGENTS.md" ] || printf '  %bnone in cwd\n' "${YELLOW}${RESET}"
+[ "$TIER3_FOUND" = "0" ] && printf '  %bnone in cwd\n' "${YELLOW}${RESET}"
+
+# FIX 6b + canonicality bonus: diverging CLAUDE.md vs AGENTS.md is the
+# most common canonicality violation — measure the thing the doc teaches
+if [ -f "CLAUDE.md" ] && [ -f "AGENTS.md" ]; then
+  if [ ! -L "AGENTS.md" ] && ! head -3 "AGENTS.md" | grep -qiE "see (the )?CLAUDE|^.?$"; then
+    if ! cmp -s "CLAUDE.md" "AGENTS.md"; then
+      printf '  %-22s %b\n' "CLAUDE≠AGENTS?" "${YELLOW}not identical, not a pointer — diverging copies?${RESET}"
+      WARN=$((WARN+1))
+    fi
+  fi
+fi
 
 # --- memory ---
 hdr "Agent memory (small + dense beats large + stale)"
@@ -85,7 +106,10 @@ hdr "Habits (presence, not size)"
 
 # --- verdict ---
 printf '\n'
-if [ "$WARN" -eq 0 ]; then
+if [ "$FOUND" = "0" ]; then
+  printf '%b✗ nothing found — is HERMES_HOME right? (%s) — run hermes-setup first\n' "$RED" "$HERMES_HOME"
+  exit 2
+elif [ "$WARN" -eq 0 ]; then
   printf '%b✓ headroom OK — nothing over budget\n' "$GREEN"
   exit 0
 else

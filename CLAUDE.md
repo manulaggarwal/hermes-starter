@@ -1,7 +1,7 @@
 # CLAUDE.md — hermes-starter
 
 ## What this is
-A starter pack for first-time Hermes Agent users: one installer, nine
+A starter pack for first-time Hermes Agent users: one installer, ten
 templates, one doc (HEADROOM.md). NOT a framework — conventions, not tooling.
 
 ## Owner

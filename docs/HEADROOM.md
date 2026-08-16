@@ -10,8 +10,8 @@ on purpose or lose it to noise. This doc is how to spend it on purpose.*
 |---|---|---|---|
 | **SOUL.md** | Identity + channel rules + behavior constraints | ≤ ~1.5KB per profile | "Would this sentence be true for ANY agent? Delete it." |
 | **Skills** | Procedures (how to do X) | Description in the index; body loads on demand | Frontmatter: `name` + `description`, strict — it's the contract future tools index |
-| **Memory** | Pointers + preferences (stable facts about the user) | Small, pruned | "If a fact outgrows memory, it graduates to a file." |
-| **Files** | Truth: docs, decisions, logs, evals | Unlimited on disk — **but CLAUDE.md/AGENTS.md-type files are tier 3 (auto-loaded): budget them like a SOUL** | The file wins every conflict. Memory points; it never copies. |
+| **Memory** | Pointers + preferences (stable facts about the user) | ≤ ~5KB per profile — prune, don't accumulate | "If a fact outgrows memory, it graduates to a file." |
+| **Files** | Truth: docs, decisions, logs, evals | Unlimited on disk — **except tier-3 context files (CLAUDE.md/AGENTS.md): budget ≤ 3KB (2× a SOUL — they carry project facts, not just identity)** | The file wins every conflict. Memory points; it never copies. |
 
 **Check yourself:** `wc -c SOUL.md` — want < ~1500. If it's over, something
 in there is a procedure or an aphorism.

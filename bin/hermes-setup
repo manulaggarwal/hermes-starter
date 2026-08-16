@@ -90,9 +90,9 @@ fi
 
 # ---------- 4. optional Obsidian layer ----------
 echo
-ask "Obsidian vault? Answers 'yes' only if you already use Obsidian. (y/N)"
+ask "Obsidian vault? Answer yes ONLY if you already use Obsidian. (y/N)"
 REPLY_UP2=$(printf %s "${REPLY:-}" | tr "[:lower:]" "[:upper:]")
-if [ "$REPLY_UP2" = "Y" ]; then
+if [ "$REPLY_UP2" = "Y" ] || [ "$REPLY_UP2" = "YES" ]; then
   ask "Vault path (a NEW folder — the installer will create it):"
   VAULT="${REPLY/#\~/$HOME}"
   if [ -z "$VAULT" ]; then

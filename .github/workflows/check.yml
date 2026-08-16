@@ -75,4 +75,20 @@ jobs:
           if bash "$GITHUB_WORKSPACE/bin/headroom-check" "$HERMES_HOME/profiles/demo" > /dev/null 2>&1; then
             echo "::error::bloated SOUL should warn (exit 1)"; exit 1
           fi
-          echo "headroom-check OK (healthy=0, bloated=1)"
+          # nothing found → exit 2 (not a congratulation)
+          bash "$GITHUB_WORKSPACE/bin/headroom-check" > /dev/null 2>&1; CODE=$?
+          [ "$CODE" = "2" ] || { echo "::error::empty HERMES_HOME should exit 2, got $CODE"; exit 1; }
+          # profile path with spaces: measured as ONE profile
+          mkdir -p "$T/hh2/profiles/my main profile"
+          printf 'x' > "$T/hh2/profiles/my main profile/SOUL.md"
+          OUT=$(HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" 2>/dev/null)
+          echo "$OUT" | grep -q "my main profile/SOUL" || { echo "::error::spaced profile name not measured"; exit 1; }
+          # diverging CLAUDE.md vs AGENTS.md → warned
+          mkdir -p "$T/div" && cd "$T/div"
+          printf 'canonical A' > CLAUDE.md && printf 'different B' > AGENTS.md
+          HERMES_HOME="$T/hh2" bash "$GITHUB_WORKSPACE/bin/headroom-check" 2>/dev/null | grep -q "diverging" || { echo "::error::divergence not flagged"; exit 1; }
+          # 'yes' at Obsidian prompt scaffolds the vault
+          V=$(mktemp -d)
+          printf "\nN\nyes\n$V\n" | bash "$GITHUB_WORKSPACE/bin/hermes-setup" > /dev/null
+          [ -f "$V/README.md" ] || { echo "::error::'yes' at Obsidian prompt did not scaffold"; exit 1; }
+          echo "headroom-check OK (healthy=0, bloated=1, empty=2, spaces, divergence, yes-prompt)"
